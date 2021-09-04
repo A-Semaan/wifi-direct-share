@@ -1,74 +1,84 @@
 import 'package:flutter/material.dart';
-import 'package:wifi_direct_share/services/share_service.dart';
+import 'dart:async';
 
-void main() {
-  runApp(MyApp());
-}
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
-class MyApp extends StatelessWidget {
-  // This widget is the root of your application.
+void main() => runApp(MyApp());
+
+class MyApp extends StatefulWidget {
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Receiving Shared Text',
-      home: MyHomePage(title: 'Shared Text'),
-    );
-  }
+  _MyAppState createState() => _MyAppState();
 }
 
-class MyHomePage extends StatefulWidget {
-  MyHomePage({Key? key, required this.title}) : super(key: key);
-
-  
-  final String title;
-
-  @override
-  _MyHomePageState createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  dynamic _sharedText = "";
+class _MyAppState extends State<MyApp> {
+  StreamSubscription? _intentDataStreamSubscription;
+  List<SharedMediaFile>? _sharedFiles;
+  String? _sharedText;
 
   @override
   void initState() {
     super.initState();
 
-    // Create the share service
-    ShareService()
-      // Register a callback so that we handle shared data if it arrives while the
-      // app is running
-      ..onDataReceived = _handleSharedData
+    // For sharing images coming from outside the app while the app is in the memory
+    _intentDataStreamSubscription = ReceiveSharingIntent.getMediaStream()
+        .listen((List<SharedMediaFile> value) {
+      setState(() {
+        print("Shared:" + (_sharedFiles?.map((f) => f.path)?.join(",") ?? ""));
+        _sharedFiles = value;
+      });
+    }, onError: (err) {
+      print("getIntentDataStream error: $err");
+    });
 
-      // Check to see if there is any shared data already, meaning that the app
-      // was launched via sharing.
-      ..getSharedData().then(_handleSharedData);
-  }
+    // For sharing images coming from outside the app while the app is closed
+    ReceiveSharingIntent.getInitialMedia().then((List<SharedMediaFile> value) {
+      setState(() {
+        _sharedFiles = value;
+      });
+    });
 
-  /// Handles any shared data we may receive.
-  void _handleSharedData(dynamic sharedData) {
-    setState(() {
-      _sharedText = sharedData;
+    // For sharing or opening urls/text coming from outside the app while the app is in the memory
+    _intentDataStreamSubscription =
+        ReceiveSharingIntent.getTextStream().listen((String value) {
+      setState(() {
+        _sharedText = value;
+      });
+    }, onError: (err) {
+      print("getLinkStream error: $err");
+    });
+
+    // For sharing or opening urls/text coming from outside the app while the app is closed
+    ReceiveSharingIntent.getInitialText().then((String? value) {
+      setState(() {
+        _sharedText = value;
+      });
     });
   }
 
   @override
+  void dispose() {
+    _intentDataStreamSubscription!.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'The shared text that you received is:',
-            ),
-            Text(
-              _sharedText.toString(),
-              style: TextStyle(fontWeight: FontWeight.bold),
-            )
-          ],
+    const textStyleBold = const TextStyle(fontWeight: FontWeight.bold);
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(
+          title: const Text('Plugin example app'),
+        ),
+        body: Center(
+          child: Column(
+            children: <Widget>[
+              Text("Shared files:", style: textStyleBold),
+              Text(_sharedFiles?.map((f) => f.path)?.join(",") ?? ""),
+              SizedBox(height: 100),
+              Text("Shared urls/text:", style: textStyleBold),
+              Text(_sharedText ?? "")
+            ],
+          ),
         ),
       ),
     );

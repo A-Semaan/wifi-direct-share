@@ -5,39 +5,17 @@ import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import android.net.Uri
+import android.os.Parcelable
 
 class MainActivity: FlutterActivity() {
-    private var sharedData: String = ""
+  override fun onCreate(savedInstanceState: Bundle?) {
 
-  override fun onCreate(
-    savedInstanceState: Bundle?
-  ) {
-    super.onCreate(savedInstanceState)
-    handleIntent()
-  }
-
-  override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
-    super.configureFlutterEngine(flutterEngine)
-    MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
-            "com.sTealth.wifi_direct_share").setMethodCallHandler { call, result ->
-              if (call.method == "getSharedData") {
-                handleIntent()
-                result.success(sharedData)
-                sharedData = ""
-              }
-            }
-  }
-
-
-  private fun handleIntent() {
-    // intent is a property of this activity
-    // Only process the intent if it's a send intent and it's of type 'text'
-    if (intent?.action == Intent.ACTION_SEND) {
-      if (intent.type == "text/plain") {
-        intent.getStringExtra(Intent.EXTRA_TEXT)?.let { intentData ->
-          sharedData = intentData
-        }
-      }
-    }
-  }
+     if (intent.getIntExtra("org.chromium.chrome.extra.TASK_ID", -1) == this.taskId) {
+         this.finish()
+         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+         startActivity(intent);
+     }
+     super.onCreate(savedInstanceState)
+ }
 }
