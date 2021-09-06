@@ -8,6 +8,8 @@ import 'package:flutter_p2p/flutter_p2p.dart';
 // ignore: import_of_legacy_library_into_null_safe
 import 'package:flutter_p2p/gen/protos/protos.pb.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:wifi_direct_share/globals.dart';
+import 'package:provider/provider.dart';
 
 class WifiDirectBody extends StatefulWidget {
   WifiDirectBody({Key? key}) : super(key: key);
@@ -29,51 +31,40 @@ class _WifiDirectBodyState extends State<WifiDirectBody>
   //sockets
   P2pSocket? _socket;
 
-  bool _isDiscovering = false;
+  bool _registered = false;
   @override
   void initState() {
-    _register();
     WidgetsBinding.instance!.addObserver(this);
-    _runDiscoverLoop();
     super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!_registered) {
+      _registered = true;
+      _register();
+    }
     return Container(
-        decoration: BoxDecoration(
-            color: Color.fromRGBO(20, 20, 20, 1.0),
-            border: Border.all(
-              color: Colors.grey[850]!,
-            ),
-            borderRadius: BorderRadius.all(Radius.circular(20))),
-        child: Column(children: [
-          Visibility(
-              visible: _isDiscovering, child: CircularProgressIndicator()),
-          ListView.separated(
-              itemBuilder: (context, index) {
-                return ListTile(
-                  title: Text(_peers[index].deviceName),
-                );
-              },
-              separatorBuilder: (context, index) {
-                return Divider(color: Colors.grey[800]);
-              },
-              itemCount: _peers.length),
-        ]));
-  }
-
-  void _runDiscoverLoop() async {
-    do {
-      setState(() {
-        _isDiscovering = true;
-      });
-      await _discover();
-      setState(() {
-        _isDiscovering = false;
-      });
-      sleep(Duration(seconds: 5));
-    } while (true);
+      decoration: BoxDecoration(
+          color: Color.fromRGBO(20, 20, 20, 1.0),
+          border: Border.all(
+            color: Colors.grey[850]!,
+          ),
+          borderRadius: BorderRadius.all(Radius.circular(20))),
+      child: ListView.separated(
+          itemBuilder: (context, index) {
+            return ListTile(
+              title: Text(
+                _peers[index].deviceName,
+                style: Theme.of(context).textTheme.bodyText2,
+              ),
+            );
+          },
+          separatorBuilder: (context, index) {
+            return Divider(color: Colors.grey[800]);
+          },
+          itemCount: _peers.length),
+    );
   }
 
   @override
@@ -109,7 +100,7 @@ class _WifiDirectBodyState extends State<WifiDirectBody>
       return;
     }
     _subscriptions.add(FlutterP2p.wifiEvents.stateChange.listen((change) {
-      // Handle wifi state change
+      print(change);
     }));
 
     _subscriptions.add(FlutterP2p.wifiEvents.connectionChange.listen((change) {
@@ -121,21 +112,25 @@ class _WifiDirectBodyState extends State<WifiDirectBody>
     }));
 
     _subscriptions.add(FlutterP2p.wifiEvents.thisDeviceChange.listen((change) {
-      // Handle changes of this device
+      print(change);
     }));
 
     _subscriptions.add(FlutterP2p.wifiEvents.peersChange.listen((change) {
       setState(() {
         _peers = change.devices;
+        context.read<Map<String, dynamic>>()["discoveringVisible"] = false;
       });
     }));
 
     _subscriptions.add(FlutterP2p.wifiEvents.discoveryChange.listen((change) {
-      // Handle discovery state changes
+      setState(() {
+        context.read<Map<String, dynamic>>()["discoveringVisible"] = false;
+      });
     }));
 
     FlutterP2p
         .register(); // Register to the native events which are send to the streams above
+    _discover();
   }
 
   void _unregister() {
@@ -145,6 +140,7 @@ class _WifiDirectBodyState extends State<WifiDirectBody>
   }
 
   Future _discover() async {
+    context.read<Map<String, dynamic>>()["discoveringVisible"] = true;
     await FlutterP2p.discoverDevices();
   }
 

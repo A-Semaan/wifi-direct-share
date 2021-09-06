@@ -26,7 +26,8 @@ dependencies:
   receive_sharing_intent: ^1.4.5
   sliding_up_panel: ^2.0.0+1
   provider: ^6.0.0
-  flutter_p2p: ^0.1.1
+  flutter_p2p:
+    path: ./lib/libs/flutter_p2p
   fluttertoast: ^8.0.8
   # one_ui_scroll_view:
   #   git:

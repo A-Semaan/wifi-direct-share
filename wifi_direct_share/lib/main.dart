@@ -1,11 +1,14 @@
 // @dart=2.9
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_p2p/flutter_p2p.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
+import 'package:wifi_direct_share/globals.dart';
 import 'package:wifi_direct_share/layouts/wifi_direct_body.dart';
 import 'package:wifi_direct_share/layouts/wifi_direct_slide_up.dart';
 
@@ -21,6 +24,7 @@ class _MyAppState extends State<MyApp> {
   Map<String, dynamic> providerData = {
     "SharedFiles": <SharedMediaFile>[],
     "SharedText": "",
+    "discoveringVisible": false,
   };
 
   @override
@@ -76,25 +80,60 @@ class _MyAppState extends State<MyApp> {
         theme: ThemeData(
             primaryColor: Colors.black,
             fontFamily: "Roboto",
+            textTheme: TextTheme(
+                bodyText1: TextStyle(color: Colors.white),
+                bodyText2: TextStyle(color: Colors.white, fontSize: 18),
+                headline6: TextStyle(color: Colors.white)),
             accentColor: Colors.black,
             backgroundColor: Colors.black,
             appBarTheme: AppBarTheme(
               brightness: Brightness.dark,
             )),
-        home: Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            title: const Text('Wi-Fi Direct'),
-            automaticallyImplyLeading: false,
-          ),
-          body: MultiProvider(
-              providers: [
-                Provider<Map<String, dynamic>>(create: (_) => providerData),
-              ],
-              child: SlidingUpPanel(
+        home: MultiProvider(
+          providers: [
+            Provider<Map<String, dynamic>>(create: (_) => providerData),
+          ],
+          builder: (BuildContext context, widget) {
+            return Scaffold(
+              backgroundColor: Colors.black,
+              appBar: AppBar(
+                title: const Text('Wi-Fi Direct'),
+                automaticallyImplyLeading: false,
+                actions: [
+                  Container(
+                    padding: EdgeInsets.only(top: 15, bottom: 15),
+                    width: 25,
+                    child: Visibility(
+                      maintainSize: true,
+                      maintainAnimation: true,
+                      maintainState: true,
+                      visible: context
+                          .watch<Map<String, dynamic>>()["discoveringVisible"],
+                      child: CircularProgressIndicator(
+                        color: Colors.lightBlue,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                      onPressed: () {
+                        _discover();
+                        context.read<Map<String, dynamic>>()[
+                            "discoveringVisible"] = true;
+                      },
+                      child: Text("Scan")),
+                ],
+              ),
+              body: SlidingUpPanel(
                 panel: WifiDIrectSlideUpPanel(),
                 body: WifiDirectBody(),
-              )),
+              ),
+            );
+          },
         ));
+  }
+
+  Future _discover() async {
+    await FlutterP2p.discoverDevices();
   }
 }
