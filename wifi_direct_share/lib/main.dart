@@ -8,6 +8,7 @@ import 'dart:async';
 
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
+import 'package:wifi_direct_share/data_classes/discovering_change_notifier.dart';
 import 'package:wifi_direct_share/globals.dart';
 import 'package:wifi_direct_share/layouts/wifi_direct_body.dart';
 import 'package:wifi_direct_share/layouts/wifi_direct_slide_up.dart';
@@ -24,7 +25,6 @@ class _MyAppState extends State<MyApp> {
   Map<String, dynamic> providerData = {
     "SharedFiles": <SharedMediaFile>[],
     "SharedText": "",
-    "discoveringVisible": false,
   };
 
   @override
@@ -83,7 +83,8 @@ class _MyAppState extends State<MyApp> {
             textTheme: TextTheme(
                 bodyText1: TextStyle(color: Colors.white),
                 bodyText2: TextStyle(color: Colors.white, fontSize: 18),
-                headline6: TextStyle(color: Colors.white)),
+                headline6: TextStyle(color: Colors.white),
+                subtitle1: TextStyle(color: Colors.grey[300], fontSize: 13)),
             accentColor: Colors.black,
             backgroundColor: Colors.black,
             appBarTheme: AppBarTheme(
@@ -92,6 +93,8 @@ class _MyAppState extends State<MyApp> {
         home: MultiProvider(
           providers: [
             Provider<Map<String, dynamic>>(create: (_) => providerData),
+            ChangeNotifierProvider<DiscoveringChangeNotifier>(
+                create: (_) => new DiscoveringChangeNotifier())
           ],
           builder: (BuildContext context, widget) {
             return Scaffold(
@@ -107,8 +110,7 @@ class _MyAppState extends State<MyApp> {
                       maintainSize: true,
                       maintainAnimation: true,
                       maintainState: true,
-                      visible: context
-                          .watch<Map<String, dynamic>>()["discoveringVisible"],
+                      visible: context.watch<DiscoveringChangeNotifier>().value,
                       child: CircularProgressIndicator(
                         color: Colors.lightBlue,
                         strokeWidth: 2,
@@ -118,14 +120,25 @@ class _MyAppState extends State<MyApp> {
                   TextButton(
                       onPressed: () {
                         _discover();
-                        context.read<Map<String, dynamic>>()[
-                            "discoveringVisible"] = true;
+                        context.read<DiscoveringChangeNotifier>().value = true;
                       },
                       child: Text("Scan")),
                 ],
               ),
               body: SlidingUpPanel(
-                panel: WifiDIrectSlideUpPanel(),
+                backdropTapClosesPanel: true,
+                backdropColor: Colors.grey[850],
+                minHeight: 60,
+                backdropEnabled: true,
+                backdropOpacity: 0.4,
+                borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20)),
+                border: Border.all(
+                  color: Colors.grey[850],
+                ),
+                color: Color.fromRGBO(20, 20, 20, 1.0),
+                panel: WifiDirectSlideUpPanel(),
                 body: WifiDirectBody(),
               ),
             );

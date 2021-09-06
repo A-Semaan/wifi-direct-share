@@ -8,7 +8,8 @@ import 'package:flutter_p2p/flutter_p2p.dart';
 // ignore: import_of_legacy_library_into_null_safe
 import 'package:flutter_p2p/gen/protos/protos.pb.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:wifi_direct_share/globals.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:wifi_direct_share/data_classes/discovering_change_notifier.dart';
 import 'package:provider/provider.dart';
 
 class WifiDirectBody extends StatefulWidget {
@@ -22,6 +23,10 @@ class _WifiDirectBodyState extends State<WifiDirectBody>
     with WidgetsBindingObserver {
   //peers
   List<WifiP2pDevice> _peers = [];
+
+  // connected device
+  WifiP2pDevice? _connectedDevice;
+  WifiP2pDevice? _tempConnectedDevice;
 
   //connect to a peer
   bool _isConnected = false;
@@ -54,10 +59,46 @@ class _WifiDirectBodyState extends State<WifiDirectBody>
       child: ListView.separated(
           itemBuilder: (context, index) {
             return ListTile(
+              leading: _getDeviceIcon(_peers[index]),
               title: Text(
                 _peers[index].deviceName,
-                style: Theme.of(context).textTheme.bodyText2,
+                style: _connectedDevice != null &&
+                        _connectedDevice!.deviceAddress ==
+                            _peers[index].deviceAddress
+                    ? TextStyle(color: Colors.blue[400], fontSize: 18)
+                    : Theme.of(context).textTheme.bodyText2,
               ),
+              subtitle: _connectedDevice != null &&
+                      _connectedDevice!.deviceAddress ==
+                          _peers[index].deviceAddress
+                  ? Text(
+                      "Tap here to disconnect",
+                      style: Theme.of(context).textTheme.subtitle1,
+                    )
+                  : null,
+              onTap: () async {
+                if (_connectedDevice != null &&
+                    _connectedDevice!.deviceAddress ==
+                        _peers[index].deviceAddress) {
+                  bool result = await _disconnect();
+                  if (result) {
+                    _connectedDevice = null;
+                  }
+                  // bool result = await FlutterP2p.cancelConnect(_peers[index]);
+                  // if (result) {
+                  //   setState(() {
+                  //     _connectedDevice = null;
+                  //   });
+                  // }
+                } else {
+                  bool result = await FlutterP2p.connect(_peers[index]);
+                  if (result) {
+                    setState(() {
+                      _tempConnectedDevice = _peers[index];
+                    });
+                  }
+                }
+              },
             );
           },
           separatorBuilder: (context, index) {
@@ -73,13 +114,38 @@ class _WifiDirectBodyState extends State<WifiDirectBody>
     super.dispose();
   }
 
+  Icon? _getDeviceIcon(WifiP2pDevice device) {
+    if (device.primaryDeviceType.startsWith("7-")) {
+      if (device.primaryDeviceType.endsWith("-0")) {
+        return const Icon(
+          Icons.laptop,
+          color: Colors.white,
+        );
+      } else if (device.primaryDeviceType.endsWith("-1")) {
+        return const Icon(
+          Icons.tv,
+          color: Colors.white,
+        );
+      }
+    } else if (device.primaryDeviceType.startsWith("10-")) {
+      return const Icon(
+        Icons.phone_android,
+        color: Colors.white,
+      );
+    }
+    return const Icon(
+      Icons.device_unknown,
+      color: Colors.white,
+    );
+  }
+
   FutureOr<bool> _checkPermission() async {
-    return true;
-    // if (!await FlutterP2p.isLocationPermissionGranted()) {
-    //   await FlutterP2p.requestLocationPermission();
-    //   return false;
-    // }
     // return true;
+    if (!await FlutterP2p.isLocationPermissionGranted()) {
+      await FlutterP2p.requestLocationPermission();
+      return false;
+    }
+    return true;
   }
 
   @override
@@ -103,28 +169,65 @@ class _WifiDirectBodyState extends State<WifiDirectBody>
       print(change);
     }));
 
-    _subscriptions.add(FlutterP2p.wifiEvents.connectionChange.listen((change) {
-      setState(() {
-        _isConnected = change.networkInfo.isConnected;
-        _isHost = change.wifiP2pInfo.isGroupOwner;
-        _deviceAddress = change.wifiP2pInfo.groupOwnerAddress;
-      });
+    _subscriptions
+        .add(FlutterP2p.wifiEvents.connectionChange.listen((change) async {
+      if (change.networkInfo.detailedState.name == "CONNECTED") {
+        setState(() {
+          _isConnected = change.networkInfo.isConnected;
+          _isHost = change.wifiP2pInfo.isGroupOwner;
+          _deviceAddress = change.wifiP2pInfo.groupOwnerAddress;
+          _connectedDevice = _tempConnectedDevice;
+          _tempConnectedDevice = null;
+        });
+        if (context.read<Map<String, dynamic>>()["SharedFiles"].length > 0) {
+          await _connectToPort(8888);
+
+          (context.read<Map<String, dynamic>>()["SharedFiles"]
+                  as List<SharedMediaFile>)
+              .forEach((element) async {
+            await _openPortAndSend(8888, element);
+          });
+        }
+      } else if (change.networkInfo.detailedState.name == "DISCONNECTED") {
+        setState(() {
+          _connectedDevice = null;
+
+          _isConnected = false;
+          _isHost = false;
+          _deviceAddress = "";
+        });
+      }
     }));
 
     _subscriptions.add(FlutterP2p.wifiEvents.thisDeviceChange.listen((change) {
-      print(change);
+      print(change.status.name == "CONNECTED");
     }));
 
     _subscriptions.add(FlutterP2p.wifiEvents.peersChange.listen((change) {
       setState(() {
         _peers = change.devices;
-        context.read<Map<String, dynamic>>()["discoveringVisible"] = false;
+        context.read<DiscoveringChangeNotifier>().value = false;
+        bool elementConnected = false;
+        _peers.forEach((element) {
+          if (element.status.name == "CONNECTED") {
+            _connectedDevice = element;
+            elementConnected = true;
+          }
+        });
+        if (!elementConnected && _connectedDevice != null) {
+          _connectedDevice = null;
+
+          _isConnected = false;
+          _isHost = false;
+          _deviceAddress = "";
+        }
       });
     }));
 
     _subscriptions.add(FlutterP2p.wifiEvents.discoveryChange.listen((change) {
       setState(() {
-        context.read<Map<String, dynamic>>()["discoveringVisible"] = false;
+        if (!change.isDiscovering)
+          context.read<DiscoveringChangeNotifier>().value = false;
       });
     }));
 
@@ -140,30 +243,31 @@ class _WifiDirectBodyState extends State<WifiDirectBody>
   }
 
   Future _discover() async {
-    context.read<Map<String, dynamic>>()["discoveringVisible"] = true;
+    context.read<DiscoveringChangeNotifier>().value = true;
     await FlutterP2p.discoverDevices();
   }
 
-  void _disconnect() async {
-    FlutterP2p.removeGroup();
+  Future<bool> _disconnect() async {
+    return await FlutterP2p.removeGroup();
   }
 
-  void _openPortAndAccept(int port) async {
+  Future _openPortAndSend(int port, SharedMediaFile file) async {
     var socket = await FlutterP2p.openHostPort(port);
     setState(() {
       _socket = socket;
     });
 
     var buffer = "";
-    socket.inputStream.listen((data) {
-      var msg = String.fromCharCodes(data.data);
-      buffer += msg;
+    await _socket!.write(File(file.path).readAsBytesSync());
+    // socket.inputStream.listen((data) {
+    //   var msg = String.fromCharCodes(data.data);
+    //   buffer += msg;
 
-      if (data.dataAvailable == 0) {
-        Fluttertoast.showToast(msg: "Data Received: $buffer");
-        buffer = "";
-      }
-    });
+    //   if (data.dataAvailable == 0) {
+    //     Fluttertoast.showToast(msg: "Data Received: $buffer");
+    //     buffer = "";
+    //   }
+    // });
 
     // Write data to the client using the _socket.write(UInt8List) or `_socket.writeString("Hello")` method
 
@@ -172,5 +276,24 @@ class _WifiDirectBodyState extends State<WifiDirectBody>
     // accept a connection on the created socket
     await FlutterP2p.acceptPort(port);
     print("_accept done");
+  }
+
+  Future _connectToPort(int port) async {
+    var socket = await FlutterP2p.connectToHost(
+      _deviceAddress,
+      port,
+      timeout: 100000,
+    );
+
+    setState(() {
+      _socket = socket;
+    });
+
+    // _socket!.inputStream.listen((data) {
+    //   var msg = utf8.decode(data.data);
+    //   snackBar("Received from Host: $msg");
+    // });
+
+    print("_connectToPort done");
   }
 }
