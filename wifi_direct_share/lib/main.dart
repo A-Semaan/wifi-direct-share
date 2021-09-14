@@ -138,7 +138,11 @@ class _MyAppState extends State<MyApp> {
                   color: Colors.grey[850],
                 ),
                 color: Color.fromRGBO(20, 20, 20, 1.0),
-                panel: WifiDirectSlideUpPanel(),
+                panelBuilder: (ScrollController controller) {
+                  return WifiDirectSlideUpPanel(
+                    controller: controller,
+                  );
+                },
                 body: WifiDirectBody(),
               ),
             );
