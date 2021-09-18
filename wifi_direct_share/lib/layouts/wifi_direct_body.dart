@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
@@ -11,6 +13,9 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:wifi_direct_share/data_classes/discovering_change_notifier.dart';
 import 'package:provider/provider.dart';
+import 'package:wifi_direct_share/data_classes/media-file.dart';
+import 'package:wifi_direct_share/data_classes/media-transaction.dart';
+import 'package:wifi_direct_share/globals.dart';
 
 class WifiDirectBody extends StatefulWidget {
   WifiDirectBody({Key? key}) : super(key: key);
@@ -180,13 +185,15 @@ class _WifiDirectBodyState extends State<WifiDirectBody>
           _tempConnectedDevice = null;
         });
         if (context.read<Map<String, dynamic>>()["SharedFiles"].length > 0) {
-          await _connectToPort(8888);
+          // await _connectToPort();
 
-          (context.read<Map<String, dynamic>>()["SharedFiles"]
-                  as List<SharedMediaFile>)
-              .forEach((element) async {
-            await _openPortAndSend(8888, element);
-          });
+          List<MediaFile> toSend = await _getMediaFiles(
+              (context.read<Map<String, dynamic>>()["SharedFiles"]
+                  as List<SharedMediaFile>));
+          MediaTransaction transaction = new MediaTransaction(toSend);
+          await _openPortAndSend(transaction);
+        } else {
+          _connectToPort();
         }
       } else if (change.networkInfo.detailedState.name == "DISCONNECTED") {
         setState(() {
@@ -251,14 +258,13 @@ class _WifiDirectBodyState extends State<WifiDirectBody>
     return await FlutterP2p.removeGroup();
   }
 
-  Future _openPortAndSend(int port, SharedMediaFile file) async {
-    var socket = await FlutterP2p.openHostPort(port);
+  Future _openPortAndSend(MediaTransaction file) async {
+    var socket = await FlutterP2p.openHostPort(PORT);
     setState(() {
       _socket = socket;
     });
 
-    var buffer = "";
-    await _socket!.write(File(file.path).readAsBytesSync());
+    await _socket!.write(Uint8List.fromList(file.toJson().codeUnits));
     // socket.inputStream.listen((data) {
     //   var msg = String.fromCharCodes(data.data);
     //   buffer += msg;
@@ -274,26 +280,52 @@ class _WifiDirectBodyState extends State<WifiDirectBody>
     print("_openPort done");
 
     // accept a connection on the created socket
-    await FlutterP2p.acceptPort(port);
+    // await FlutterP2p.acceptPort(PORT);
     print("_accept done");
   }
 
-  Future _connectToPort(int port) async {
+  _connectToPort() async {
     var socket = await FlutterP2p.connectToHost(
-      _deviceAddress,
-      port,
-      timeout: 100000,
+      _deviceAddress, // see above `Connect to a device`
+      PORT,
+      timeout: 100000, // timeout in milliseconds (default 500)
     );
 
     setState(() {
       _socket = socket;
     });
 
-    // _socket!.inputStream.listen((data) {
-    //   var msg = utf8.decode(data.data);
-    //   snackBar("Received from Host: $msg");
-    // });
+    Uint8List? buffer;
+    MediaTransaction? transaction;
+    socket.inputStream.listen((data) {
+      if (buffer == null)
+        buffer = Uint8List.fromList(data.data);
+      else {
+        buffer!.addAll(data.data);
+      }
+
+      if (data.dataAvailable == 0) {
+        transaction = MediaTransaction.fromUint8List(buffer!);
+        buffer = null;
+      }
+    });
+
+    print(transaction!);
+
+    // Write data to the host using the _socket.write(UInt8List) or `_socket.writeString("Hello")` method
 
     print("_connectToPort done");
+  }
+
+  Future<List<MediaFile>> _getMediaFiles(List<SharedMediaFile> list) async {
+    List<MediaFile> toReturn = <MediaFile>[];
+    list.forEach((element) {
+      toReturn.add(MediaFile(
+          element.path.split("/").last,
+          element.path.substring(element.path.lastIndexOf(".") + 1),
+          File(element.path).lengthSync(),
+          File(element.path).readAsBytesSync()));
+    });
+    return toReturn;
   }
 }

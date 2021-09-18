@@ -74,16 +74,6 @@ class _WifiDirectSlideUpPanelState extends State<WifiDirectSlideUpPanel> {
             ),
           ],
         ),
-        // Column(
-        //   children: <Widget>[
-        //     Text("Shared files:", style: textStyleBold),
-        //     Text(context
-        //         .read<Map<String, dynamic>>()["SharedFiles"]
-        //         .map((f) => f.path)
-        //         .join(",")),
-        //     SizedBox(height: 100),
-        //   ],
-        // ),
       ),
     );
   }

@@ -29,6 +29,7 @@ dependencies:
   flutter_p2p:
     path: ./lib/libs/flutter_p2p
   fluttertoast: ^8.0.8
+  percent_indicator: ^2.1.7+2
   # one_ui_scroll_view:
   #   git:
   #     url: https://github.com/jja08111/one_ui_scroll_view.git
