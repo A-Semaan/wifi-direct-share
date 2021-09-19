@@ -1,8 +1,7 @@
-// @dart=2.9
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_p2p/flutter_p2p.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 
@@ -12,6 +11,7 @@ import 'package:wifi_direct_share/data_classes/discovering_change_notifier.dart'
 import 'package:wifi_direct_share/globals.dart';
 import 'package:wifi_direct_share/layouts/wifi_direct_body.dart';
 import 'package:wifi_direct_share/layouts/wifi_direct_slide_up.dart';
+import 'package:path_provider/path_provider.dart';
 
 void main() => runApp(MyApp());
 
@@ -21,7 +21,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  StreamSubscription _intentDataStreamSubscription;
+  StreamSubscription? _intentDataStreamSubscription;
   Map<String, dynamic> providerData = {
     "SharedFiles": <SharedMediaFile>[],
     "SharedText": "",
@@ -30,7 +30,7 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-
+    _getInternalDownloadsFolderPath();
     // For sharing images coming from outside the app while the app is in the memory
     _intentDataStreamSubscription = ReceiveSharingIntent.getMediaStream()
         .listen((List<SharedMediaFile> value) {
@@ -46,31 +46,17 @@ class _MyAppState extends State<MyApp> {
     // For sharing images coming from outside the app while the app is closed
     ReceiveSharingIntent.getInitialMedia().then((List<SharedMediaFile> value) {
       setState(() {
-        providerData["SharedFiles"] = value ?? <SharedMediaFile>[];
-      });
-    });
-
-    // For sharing or opening urls/text coming from outside the app while the app is in the memory
-    _intentDataStreamSubscription =
-        ReceiveSharingIntent.getTextStream().listen((String value) {
-      setState(() {
-        providerData["SharedText"] = value ?? "";
-      });
-    }, onError: (err) {
-      print("getLinkStream error: $err");
-    });
-
-    // For sharing or opening urls/text coming from outside the app while the app is closed
-    ReceiveSharingIntent.getInitialText().then((String value) {
-      setState(() {
-        providerData["SharedText"] = value ?? "";
+        providerData["SharedFiles"] = value;
+        if (value.length > 0) {
+          deviceType = DeviceType.sender;
+        }
       });
     });
   }
 
   @override
   void dispose() {
-    _intentDataStreamSubscription.cancel();
+    _intentDataStreamSubscription!.cancel();
     super.dispose();
   }
 
@@ -119,7 +105,7 @@ class _MyAppState extends State<MyApp> {
                   ),
                   TextButton(
                       onPressed: () {
-                        _discover();
+                        discover();
                         context.read<DiscoveringChangeNotifier>().value = true;
                       },
                       child: Text("Scan")),
@@ -127,7 +113,7 @@ class _MyAppState extends State<MyApp> {
               ),
               body: SlidingUpPanel(
                 backdropTapClosesPanel: true,
-                backdropColor: Colors.grey[850],
+                backdropColor: Colors.grey[850]!,
                 minHeight: 60,
                 backdropEnabled: true,
                 backdropOpacity: 0.4,
@@ -135,7 +121,7 @@ class _MyAppState extends State<MyApp> {
                     topLeft: Radius.circular(20),
                     topRight: Radius.circular(20)),
                 border: Border.all(
-                  color: Colors.grey[850],
+                  color: Colors.grey[850]!,
                 ),
                 color: Color.fromRGBO(20, 20, 20, 1.0),
                 panelBuilder: (ScrollController controller) {
@@ -150,7 +136,12 @@ class _MyAppState extends State<MyApp> {
         ));
   }
 
-  Future _discover() async {
-    await FlutterP2p.discoverDevices();
+  _getInternalDownloadsFolderPath() async {
+    if (internalStorageDownloadsFolderPath != "") {
+      return;
+    }
+    Directory? dir = await getExternalStorageDirectory();
+    internalStorageDownloadsFolderPath =
+        dir!.path.substring(0, dir.path.indexOf("0") + 2) + "Download";
   }
 }
