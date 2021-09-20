@@ -29,12 +29,13 @@ dependencies:
   # flutter_p2p:
   #   path: ./lib/libs/flutter_p2p
   fluttertoast: ^8.0.8
-  percent_indicator: ^2.1.7+2
+  percent_indicator: ^3.0.1
   flutter_nearby_connections: ^1.1.1
   device_info: ^2.0.2
   quiver: ^3.0.1
   path_provider: ^2.0.2
   cupertino_icons: ^1.0.2
+  flutter_local_notifications: ^8.2.0
   # one_ui_scroll_view:
   #   git:
   #     url: https://github.com/jja08111/one_ui_scroll_view.git

@@ -8,6 +8,9 @@ import 'dart:async';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'package:wifi_direct_share/data_classes/discovering_change_notifier.dart';
+import 'package:wifi_direct_share/data_classes/percentage_of_io.dart';
+import 'package:wifi_direct_share/data_classes/refresh_function.dart';
+import 'package:wifi_direct_share/data_classes/show_io_percentage.dart';
 import 'package:wifi_direct_share/globals.dart';
 import 'package:wifi_direct_share/layouts/wifi_direct_body.dart';
 import 'package:wifi_direct_share/layouts/wifi_direct_slide_up.dart';
@@ -24,6 +27,7 @@ class _MyAppState extends State<MyApp> {
   StreamSubscription? _intentDataStreamSubscription;
   Map<String, dynamic> providerData = {
     "SharedFiles": <SharedMediaFile>[],
+    "ReceivedFiles": <File>[],
     "SharedText": "",
   };
 
@@ -80,7 +84,15 @@ class _MyAppState extends State<MyApp> {
           providers: [
             Provider<Map<String, dynamic>>(create: (_) => providerData),
             ChangeNotifierProvider<DiscoveringChangeNotifier>(
-                create: (_) => new DiscoveringChangeNotifier())
+                create: (_) => new DiscoveringChangeNotifier()),
+            ChangeNotifierProvider<PercentageOfIO>(
+              create: (_) => PercentageOfIO(0),
+            ),
+            ChangeNotifierProvider<ShowPercentageOfIO>(
+              create: (_) => ShowPercentageOfIO(false),
+            ),
+            Provider<RefreshFunction>(
+                create: (_) => RefreshFunction(),),
           ],
           builder: (BuildContext context, widget) {
             return Scaffold(

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -12,6 +13,9 @@ import 'package:wifi_direct_share/data_classes/discovering_change_notifier.dart'
 import 'package:provider/provider.dart';
 import 'package:wifi_direct_share/data_classes/media-file.dart';
 import 'package:wifi_direct_share/data_classes/media-transaction.dart';
+import 'package:wifi_direct_share/data_classes/percentage_of_io.dart';
+import 'package:wifi_direct_share/data_classes/refresh_function.dart';
+import 'package:wifi_direct_share/data_classes/show_io_percentage.dart';
 import 'package:wifi_direct_share/globals.dart';
 import 'package:device_info/device_info.dart';
 
@@ -28,8 +32,13 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
   List<int> tempBufferToWriteOn = <int>[];
   String tempFileNameBeingReceived = "";
 
-  List<Device> devices = [];
-  List<Device> connectedDevices = [];
+  HashSet<Device> devices = HashSet<Device>(equals: (device1, device2) {
+    return device1.deviceId == device2;
+  });
+  HashSet<Device> connectedDevices =
+      HashSet<Device>(equals: (device1, device2) {
+    return device1.deviceId == device2;
+  });
   late StreamSubscription? subscription;
   late StreamSubscription? receivedDataSubscription;
 
@@ -43,6 +52,14 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
   bool _registered = false;
 
   Device? _tempConnectedDevice;
+
+  // reception Data
+  int totalBytesToReceive = 0;
+  int totalBytesReceived = 0;
+
+  //awaiting send
+  MediaTransaction? transactionAwaitingSend;
+
   @override
   void initState() {
     super.initState();
@@ -61,23 +78,23 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
       child: ListView.separated(
           itemBuilder: (context, index) {
             return ListTile(
-              leading: _getDeviceIcon(devices[index]),
+              leading: _getDeviceIcon(devices.elementAt(index)),
               title: Text(
-                devices[index].deviceName,
+                devices.elementAt(index).deviceName,
                 style: connectedDevices.length > 0 &&
-                        connectedDevices.contains(devices[index])
+                        connectedDevices.contains(devices.elementAt(index))
                     ? TextStyle(color: Colors.blue[400], fontSize: 18)
                     : Theme.of(context).textTheme.bodyText2,
               ),
               subtitle: connectedDevices.length > 0 &&
-                      connectedDevices.contains(devices[index])
+                      connectedDevices.contains(devices.elementAt(index))
                   ? Text(
                       "Tap here to disconnect",
                       style: Theme.of(context).textTheme.subtitle1,
                     )
                   : null,
               onTap: () async {
-                Device device = devices[index];
+                Device device = devices.elementAt(index);
                 switch (device.state) {
                   case SessionState.notConnected:
                     nearbyService!.invitePeer(
@@ -87,10 +104,12 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
                     MediaTransaction transaction = MediaTransaction(
                         await _getMediaFiles(context
                             .read<Map<String, dynamic>>()["SharedFiles"]));
-                    _sendData(device, transaction);
+                    _requestSend(device, transaction);
                     break;
                   case SessionState.connected:
                     nearbyService!.disconnectPeer(deviceID: device.deviceId);
+                    context.read<PercentageOfIO>().value = 0.0;
+                    context.read<ShowPercentageOfIO>().value = false;
                     break;
                   case SessionState.connecting:
                     break;
@@ -189,10 +208,30 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
       });
     });
 
-    receivedDataSubscription =
-        nearbyService!.dataReceivedSubscription(callback: (data) async {
-      data["message"] = jsonDecode(data["message"]);
+    receivedDataSubscription = nearbyService!
+        .dataReceivedSubscription(callback: dataReceivedSubscriptionCallback);
+  }
 
+  dataReceivedSubscriptionCallback(data) async {
+    data["message"] = jsonDecode(data["message"]);
+
+    if (data["message"]["type"].contains("TRANSACTION_ACCEPTED")) {
+      //accepted and sending to two
+      _sendData(data["deviceId"], transactionAwaitingSend!);
+    } else if (data["message"]["type"].contains("TRANSACTION_HEADER")) {
+      //receiving request from one, accepting
+      context.read<PercentageOfIO>().value = 0.0;
+      context.read<ShowPercentageOfIO>().value = true;
+      totalBytesToReceive = data["message"]["totalBytes"];
+      (context.read<Map<String, dynamic>>()["ReceivedFiles"] as List<File>)
+          .clear();
+      nearbyService!.sendMessage(
+          data["deviceId"],
+          jsonEncode({
+            "type": "TRANSACTION_ACCEPTED",
+          }));
+    } else if (data["message"]["type"].contains("PACKET")) {
+      //receiving data from one
       if (data["message"]["status"].contains("BEGIN") ||
           data["message"]["status"].contains("MID")) {
         if (data["message"]["status"].contains("BEGIN")) {
@@ -200,6 +239,9 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
         }
         List<int> dataInts =
             (jsonDecode(data["message"]["data"]) as List).cast<int>();
+        totalBytesReceived += dataInts.length;
+        context.read<PercentageOfIO>().value =
+            totalBytesReceived / totalBytesToReceive;
         tempBufferToWriteOn.addAll(dataInts);
         // print("dataReceivedSubscription: ${jsonEncode(data['message'])}");
       }
@@ -212,50 +254,98 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
             if (!(await file.exists())) {
               await file.create();
             }
-            await file.writeAsBytes(tempBufferToWriteOn,
-                mode: FileMode.write, flush: true);
+            await file.writeAsBytes(
+              tempBufferToWriteOn,
+              mode: FileMode.writeOnly,
+            );
+            (context.read<Map<String, dynamic>>()["ReceivedFiles"]
+                    as List<File>)
+                .add(file);
+            context.read<RefreshFunction>().func!();
             tempBufferToWriteOn.clear();
           } catch (ex) {
             print(ex);
+          } finally {
+            receivedDataSubscription!.cancel();
+            receivedDataSubscription = nearbyService!.dataReceivedSubscription(
+                callback: dataReceivedSubscriptionCallback);
           }
         }
       }
-      receptionCounter++;
-      // showToast(jsonEncode(data),
-      //     context: context,
-      //     axis: Axis.horizontal,
-      //     alignment: Alignment.center,
-      //     position: StyledToastPosition.bottom);
-    });
+    } else if (data["message"]["type"].contains("TRANSACTION_TRAILER")) {
+      //receiving data from one
+      totalBytesToReceive = 0;
+      totalBytesReceived = 0;
+      // context.read<ShowPercentageOfIO>().value = false;
+      // context.read<PercentageOfIO>().value = 0.0;
+    }
   }
 
-  _sendData(Device device, MediaTransaction transaction) {
+  _requestSend(Device device, MediaTransaction transaction) {
+    int totalBytes = 0;
     transaction.data!.forEach((element) {
-      int totalToSend = (element.size! / PACKET_FRAGMENT).ceil();
+      totalBytes += element.file!.length;
+    });
+
+    transactionAwaitingSend = transaction;
+
+    nearbyService!.sendMessage(
+        device.deviceId,
+        jsonEncode({
+          "type": "TRANSACTION_HEADER",
+          "totalFiles": transaction.data!.length,
+          "totalBytes": totalBytes,
+        }));
+  }
+
+  _sendData(String deviceId, MediaTransaction transaction) {
+    context.read<ShowPercentageOfIO>().value = true;
+    context.read<PercentageOfIO>().value = 0;
+    int totalBytes = 0;
+    transaction.data!.forEach((element) {
+      totalBytes += element.file!.length;
+    });
+    int totalBeingSent = 0;
+
+    // await Future.delayed(Duration(milliseconds: 200));
+
+    transaction.data!.forEach((element) {
+      int totalPacketsToSend = (element.size! / PACKET_FRAGMENT).ceil();
       List<List<int>> partitions =
           partition(element.file!, PACKET_FRAGMENT).toList();
 
-      for (int i = 0; i < totalToSend; i++) {
+      for (int i = 0; i < totalPacketsToSend; i++) {
         String status = "";
-        if (totalToSend == 1) {
+        if (totalPacketsToSend == 1) {
           status = "BEGIN|END";
         } else if (i == 0) {
           status = "BEGIN";
-        } else if (i == totalToSend - 1) {
+        } else if (i == totalPacketsToSend - 1) {
           status = "MID|END";
         } else {
           status = "MID";
         }
         dynamic data = jsonEncode(partitions[i]);
+        totalBeingSent += partitions[i].length;
+
         nearbyService!.sendMessage(
-            device.deviceId,
+            deviceId,
             jsonEncode({
-              "sequenceIndex": "$i / $totalToSend",
+              "type": "PACKET",
+              "sequenceIndex": "$i / $totalPacketsToSend",
               "fileID": element.name!,
               "status": status,
               "data": data,
             }));
       }
+      context.read<PercentageOfIO>().value = totalBeingSent / totalBytes;
     });
+    // await Future.delayed(Duration(milliseconds: 200));
+    nearbyService!.sendMessage(
+        deviceId,
+        jsonEncode({
+          "type": "TRANSACTION_TRAILER",
+          "status": "END",
+        }));
   }
 }
