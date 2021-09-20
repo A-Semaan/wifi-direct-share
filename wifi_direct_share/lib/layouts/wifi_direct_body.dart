@@ -190,26 +190,35 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
     });
 
     receivedDataSubscription =
-        nearbyService!.dataReceivedSubscription(callback: (data) {
+        nearbyService!.dataReceivedSubscription(callback: (data) async {
       data["message"] = jsonDecode(data["message"]);
-      if (tempFileNameBeingReceived == "") {
-        tempFileNameBeingReceived = data["message"]["fileID"];
-      }
-      if (data["message"]["fileID"] == tempFileNameBeingReceived) {
+
+      if (data["message"]["status"].contains("BEGIN") ||
+          data["message"]["status"].contains("MID")) {
+        if (data["message"]["status"].contains("BEGIN")) {
+          tempFileNameBeingReceived = data["message"]["fileID"];
+        }
         List<int> dataInts =
             (jsonDecode(data["message"]["data"]) as List).cast<int>();
         tempBufferToWriteOn.addAll(dataInts);
-        print("dataReceivedSubscription: ${jsonEncode(data["message"])}");
-      } else {
+        // print("dataReceivedSubscription: ${jsonEncode(data['message'])}");
+      }
+      if (data["message"]["status"].contains("END")) {
         if (tempBufferToWriteOn.length > 0) {
-          File file = File(internalStorageDownloadsFolderPath +
-              "/" +
-              tempFileNameBeingReceived);
-          file.createSync();
-          file.writeAsBytesSync(tempBufferToWriteOn);
-          
+          try {
+            File file = File(internalStorageDownloadsFolderPath +
+                "/" +
+                tempFileNameBeingReceived);
+            if (!(await file.exists())) {
+              await file.create();
+            }
+            await file.writeAsBytes(tempBufferToWriteOn,
+                mode: FileMode.write, flush: true);
+            tempBufferToWriteOn.clear();
+          } catch (ex) {
+            print(ex);
+          }
         }
-        tempFileNameBeingReceived = data["message"]["fileID"];
       }
       receptionCounter++;
       // showToast(jsonEncode(data),
@@ -227,11 +236,24 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
           partition(element.file!, PACKET_FRAGMENT).toList();
 
       for (int i = 0; i < totalToSend; i++) {
+        String status = "";
+        if (totalToSend == 1) {
+          status = "BEGIN|END";
+        } else if (i == 0) {
+          status = "BEGIN";
+        } else if (i == totalToSend - 1) {
+          status = "MID|END";
+        } else {
+          status = "MID";
+        }
+        dynamic data = jsonEncode(partitions[i]);
         nearbyService!.sendMessage(
             device.deviceId,
             jsonEncode({
+              "sequenceIndex": "$i / $totalToSend",
               "fileID": element.name!,
-              "data": jsonEncode(partitions[i]),
+              "status": status,
+              "data": data,
             }));
       }
     });
