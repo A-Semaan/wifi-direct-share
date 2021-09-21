@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 
@@ -67,85 +68,230 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-        theme: ThemeData(
-            primaryColor: Colors.black,
-            fontFamily: "Roboto",
-            textTheme: TextTheme(
-                bodyText1: TextStyle(color: Colors.white),
-                bodyText2: TextStyle(color: Colors.white, fontSize: 18),
-                headline6: TextStyle(color: Colors.white),
-                subtitle1: TextStyle(color: Colors.grey[300], fontSize: 13)),
-            accentColor: Colors.black,
+      theme: ThemeData(
+          primaryColor: Colors.black,
+          fontFamily: "Roboto",
+          textTheme: TextTheme(
+              bodyText1: TextStyle(color: Colors.white),
+              bodyText2: TextStyle(color: Colors.white, fontSize: 18),
+              headline6: TextStyle(color: Colors.white),
+              subtitle1: TextStyle(color: Colors.grey[300], fontSize: 13)),
+          // colorScheme: ColorScheme(brightness: Brightness.dark,secondary: Colors.black),
+          backgroundColor: Colors.black,
+          appBarTheme: AppBarTheme(
+            color: Colors.black,
+            systemOverlayStyle:
+                SystemUiOverlayStyle(statusBarBrightness: Brightness.dark),
+          )),
+      home: MultiProvider(
+        providers: [
+          Provider<Map<String, dynamic>>(create: (_) => providerData),
+          ChangeNotifierProvider<DiscoveringChangeNotifier>(
+              create: (_) => new DiscoveringChangeNotifier()),
+          ChangeNotifierProvider<PercentageOfIO>(
+            create: (_) => PercentageOfIO(0),
+          ),
+          ChangeNotifierProvider<ShowPercentageOfIO>(
+            create: (_) => ShowPercentageOfIO(false),
+          ),
+          Provider<RefreshFunction>(
+            create: (_) => RefreshFunction(),
+          ),
+        ],
+        builder: (BuildContext context, widget) {
+          return Scaffold(
             backgroundColor: Colors.black,
-            appBarTheme: AppBarTheme(
-              brightness: Brightness.dark,
-            )),
-        home: MultiProvider(
-          providers: [
-            Provider<Map<String, dynamic>>(create: (_) => providerData),
-            ChangeNotifierProvider<DiscoveringChangeNotifier>(
-                create: (_) => new DiscoveringChangeNotifier()),
-            ChangeNotifierProvider<PercentageOfIO>(
-              create: (_) => PercentageOfIO(0),
-            ),
-            ChangeNotifierProvider<ShowPercentageOfIO>(
-              create: (_) => ShowPercentageOfIO(false),
-            ),
-            Provider<RefreshFunction>(
-                create: (_) => RefreshFunction(),),
-          ],
-          builder: (BuildContext context, widget) {
-            return Scaffold(
-              backgroundColor: Colors.black,
-              appBar: AppBar(
-                title: const Text('Wi-Fi Direct'),
-                automaticallyImplyLeading: false,
-                actions: [
-                  Container(
-                    padding: EdgeInsets.only(top: 15, bottom: 15),
-                    width: 25,
-                    child: Visibility(
-                      maintainSize: true,
-                      maintainAnimation: true,
-                      maintainState: true,
-                      visible: context.watch<DiscoveringChangeNotifier>().value,
-                      child: CircularProgressIndicator(
-                        color: Colors.lightBlue,
-                        strokeWidth: 2,
-                      ),
+            appBar: AppBar(
+              title: const Text('Wi-Fi Direct'),
+              automaticallyImplyLeading: false,
+              actions: [
+                Container(
+                  padding: EdgeInsets.only(top: 15, bottom: 15),
+                  width: 25,
+                  child: Visibility(
+                    maintainSize: true,
+                    maintainAnimation: true,
+                    maintainState: true,
+                    visible: context.watch<DiscoveringChangeNotifier>().value,
+                    child: CircularProgressIndicator(
+                      color: Colors.lightBlue,
+                      strokeWidth: 2,
                     ),
                   ),
-                  TextButton(
-                      onPressed: () {
-                        discover();
-                        context.read<DiscoveringChangeNotifier>().value = true;
-                      },
-                      child: Text("Scan")),
-                ],
-              ),
-              body: SlidingUpPanel(
-                backdropTapClosesPanel: true,
-                backdropColor: Colors.grey[850]!,
-                minHeight: 60,
-                backdropEnabled: true,
-                backdropOpacity: 0.4,
-                borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20)),
-                border: Border.all(
-                  color: Colors.grey[850]!,
                 ),
-                color: Color.fromRGBO(20, 20, 20, 1.0),
-                panelBuilder: (ScrollController controller) {
-                  return WifiDirectSlideUpPanel(
-                    controller: controller,
-                  );
-                },
-                body: WifiDirectBody(),
+                TextButton(
+                    onPressed: () {
+                      discover();
+                      context.read<DiscoveringChangeNotifier>().value = true;
+                    },
+                    child: Text("Scan")),
+              ],
+            ),
+            body: SlidingUpPanel(
+              backdropTapClosesPanel: true,
+              backdropColor: Colors.grey[850]!,
+              minHeight: 60,
+              backdropEnabled: true,
+              backdropOpacity: 0.4,
+              borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(20), topRight: Radius.circular(20)),
+              border: Border.all(
+                color: Colors.grey[850]!,
               ),
-            );
-          },
-        ));
+              color: Color.fromRGBO(20, 20, 20, 1.0),
+              panelBuilder: (ScrollController controller) {
+                return WifiDirectSlideUpPanel(
+                  controller: controller,
+                );
+              },
+              body: WifiDirectBody(),
+            ),
+          );
+        },
+      ),
+      // FutureBuilder(
+      //   future: [Permission.locationWhenInUse, Permission.storage].request(),
+      //   builder: (context,
+      //       AsyncSnapshot<Map<Permission, PermissionStatus>> snapshot) {
+      //     if (snapshot.hasError) {
+      //       return Scaffold(
+      //         backgroundColor: Colors.black,
+      //         body: Center(
+      //           child: Padding(
+      //             padding: const EdgeInsets.all(8.0),
+      //             child: Text(
+      //               "An error has occured while requesting Storage permission",
+      //               textAlign: TextAlign.center,
+      //             ),
+      //           ),
+      //         ),
+      //       );
+      //     } else if (!snapshot.hasData ||
+      //         snapshot.connectionState != ConnectionState.done) {
+      //       return Scaffold(
+      //         backgroundColor: Colors.black,
+      //         body: Center(
+      //           child: SizedBox(
+      //             width: 40,
+      //             height: 40,
+      //             child: CircularProgressIndicator(),
+      //           ),
+      //         ),
+      //       );
+      //     } else if (snapshot.hasData) {
+      //       if ((snapshot.data![Permission.storage] as PermissionStatus)
+      //           .isGranted) {
+      //         return MultiProvider(
+      //           providers: [
+      //             Provider<Map<String, dynamic>>(create: (_) => providerData),
+      //             ChangeNotifierProvider<DiscoveringChangeNotifier>(
+      //                 create: (_) => new DiscoveringChangeNotifier()),
+      //             ChangeNotifierProvider<PercentageOfIO>(
+      //               create: (_) => PercentageOfIO(0),
+      //             ),
+      //             ChangeNotifierProvider<ShowPercentageOfIO>(
+      //               create: (_) => ShowPercentageOfIO(false),
+      //             ),
+      //             Provider<RefreshFunction>(
+      //               create: (_) => RefreshFunction(),
+      //             ),
+      //           ],
+      //           builder: (BuildContext context, widget) {
+      //             return Scaffold(
+      //               backgroundColor: Colors.black,
+      //               appBar: AppBar(
+      //                 title: const Text('Wi-Fi Direct'),
+      //                 automaticallyImplyLeading: false,
+      //                 actions: [
+      //                   Container(
+      //                     padding: EdgeInsets.only(top: 15, bottom: 15),
+      //                     width: 25,
+      //                     child: Visibility(
+      //                       maintainSize: true,
+      //                       maintainAnimation: true,
+      //                       maintainState: true,
+      //                       visible: context
+      //                           .watch<DiscoveringChangeNotifier>()
+      //                           .value,
+      //                       child: CircularProgressIndicator(
+      //                         color: Colors.lightBlue,
+      //                         strokeWidth: 2,
+      //                       ),
+      //                     ),
+      //                   ),
+      //                   TextButton(
+      //                       onPressed: () {
+      //                         discover();
+      //                         context
+      //                             .read<DiscoveringChangeNotifier>()
+      //                             .value = true;
+      //                       },
+      //                       child: Text("Scan")),
+      //                 ],
+      //               ),
+      //               body: SlidingUpPanel(
+      //                 backdropTapClosesPanel: true,
+      //                 backdropColor: Colors.grey[850]!,
+      //                 minHeight: 60,
+      //                 backdropEnabled: true,
+      //                 backdropOpacity: 0.4,
+      //                 borderRadius: BorderRadius.only(
+      //                     topLeft: Radius.circular(20),
+      //                     topRight: Radius.circular(20)),
+      //                 border: Border.all(
+      //                   color: Colors.grey[850]!,
+      //                 ),
+      //                 color: Color.fromRGBO(20, 20, 20, 1.0),
+      //                 panelBuilder: (ScrollController controller) {
+      //                   return WifiDirectSlideUpPanel(
+      //                     controller: controller,
+      //                   );
+      //                 },
+      //                 body: WifiDirectBody(),
+      //               ),
+      //             );
+      //           },
+      //         );
+      //       } else {
+      //         return Scaffold(
+      //           backgroundColor: Colors.black,
+      //           body: Center(
+      //             child: Padding(
+      //               padding: const EdgeInsets.all(8.0),
+      //               child: Column(
+      //                 mainAxisSize: MainAxisSize.min,
+      //                 children: [
+      //                   Text(
+      //                       "This app needs Storage permission in order for it to run",
+      //                       textAlign: TextAlign.center),
+      //                   TextButton(
+      //                       onPressed: () async {
+      //                         openAppSettings();
+      //                         await Future.delayed(
+      //                             Duration(milliseconds: 100));
+      //                         setState(() {});
+      //                       },
+      //                       child: Text("Grant storage permission")),
+      //                 ],
+      //               ),
+      //             ),
+      //           ),
+      //         );
+      //       }
+      //     } else {
+      //       return Scaffold(
+      //         backgroundColor: Colors.black,
+      //         body: Center(
+      //           child: Padding(
+      //             padding: const EdgeInsets.all(8.0),
+      //             child: Text("unknown state", textAlign: TextAlign.center),
+      //           ),
+      //         ),
+      //       );
+      //     }
+      //   },
+      // )
+    );
   }
 
   _getInternalDownloadsFolderPath() async {

@@ -36,6 +36,8 @@ dependencies:
   path_provider: ^2.0.2
   cupertino_icons: ^1.0.2
   flutter_local_notifications: ^8.2.0
+  permission_handler: ^8.1.6
+  open_file: ^3.2.1
   # one_ui_scroll_view:
   #   git:
   #     url: https://github.com/jja08111/one_ui_scroll_view.git

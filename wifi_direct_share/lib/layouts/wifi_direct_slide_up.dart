@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
+import 'package:open_file/open_file.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 import 'package:provider/provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
@@ -91,10 +92,11 @@ class _WifiDirectSlideUpPanelState extends State<WifiDirectSlideUpPanel> {
                         progressColor: Colors.green[400],
                         radius: 32,
                         lineWidth: 3,
-                        animation: true,
+                        // animation: true,
                         percent: context.watch<PercentageOfIO>().value,
                         center: Text(
-                          (context.watch<PercentageOfIO>().value.floor() * 100)
+                          (context.watch<PercentageOfIO>().value * 100)
+                              .floor()
                               .toString(),
                           style: Theme.of(context).textTheme.subtitle1,
                         ),
@@ -134,6 +136,11 @@ class _WifiDirectSlideUpPanelState extends State<WifiDirectSlideUpPanel> {
                               .path
                               .split("/")
                               .last),
+                          onTap: () {
+                            OpenFile.open((context.read<Map<String, dynamic>>()[
+                                    "SharedFiles"][index] as SharedMediaFile)
+                                .path);
+                          },
                         );
                       },
                       separatorBuilder: (context, index) {
@@ -160,6 +167,11 @@ class _WifiDirectSlideUpPanelState extends State<WifiDirectSlideUpPanel> {
                               .path
                               .split("/")
                               .last),
+                          onTap: () {
+                            OpenFile.open((context.read<Map<String, dynamic>>()[
+                                    "ReceivedFiles"][index] as File)
+                                .path);
+                          },
                         );
                       },
                       separatorBuilder: (context, index) {

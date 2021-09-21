@@ -51,14 +51,14 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
 
   bool _registered = false;
 
-  Device? _tempConnectedDevice;
-
   // reception Data
   int totalBytesToReceive = 0;
   int totalBytesReceived = 0;
 
   //awaiting send
-  MediaTransaction? transactionAwaitingSend;
+  MediaTransaction? _transactionAwaitingSend;
+  Device? _tempConnectedDevice;
+  bool _triggerSend = false;
 
   @override
   void initState() {
@@ -82,12 +82,16 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
               title: Text(
                 devices.elementAt(index).deviceName,
                 style: connectedDevices.length > 0 &&
-                        connectedDevices.contains(devices.elementAt(index))
+                        connectedDevices
+                            .map((e) => e.deviceId)
+                            .contains(devices.elementAt(index).deviceId)
                     ? TextStyle(color: Colors.blue[400], fontSize: 18)
                     : Theme.of(context).textTheme.bodyText2,
               ),
               subtitle: connectedDevices.length > 0 &&
-                      connectedDevices.contains(devices.elementAt(index))
+                      connectedDevices
+                          .map((e) => e.deviceId)
+                          .contains(devices.elementAt(index).deviceId)
                   ? Text(
                       "Tap here to disconnect",
                       style: Theme.of(context).textTheme.subtitle1,
@@ -104,7 +108,9 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
                     MediaTransaction transaction = MediaTransaction(
                         await _getMediaFiles(context
                             .read<Map<String, dynamic>>()["SharedFiles"]));
-                    _requestSend(device, transaction);
+                    _transactionAwaitingSend = transaction;
+                    _tempConnectedDevice = device;
+                    _triggerSend = true;
                     break;
                   case SessionState.connected:
                     nearbyService!.disconnectPeer(deviceID: device.deviceId);
@@ -206,10 +212,24 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
             .where((d) => d.state == SessionState.connected)
             .toList());
       });
+      triggerSenRequest();
     });
 
     receivedDataSubscription = nearbyService!
         .dataReceivedSubscription(callback: dataReceivedSubscriptionCallback);
+  }
+
+  triggerSenRequest() {
+    if (_triggerSend &&
+        _tempConnectedDevice != null &&
+        _transactionAwaitingSend != null &&
+        _transactionAwaitingSend!.data!.length > 0) {
+      print("#########################################################");
+      _triggerSend = false;
+      Future.delayed(Duration(seconds: 2), () {
+        _requestSend(_tempConnectedDevice!, _transactionAwaitingSend!);
+      });
+    }
   }
 
   dataReceivedSubscriptionCallback(data) async {
@@ -217,7 +237,7 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
 
     if (data["message"]["type"].contains("TRANSACTION_ACCEPTED")) {
       //accepted and sending to two
-      _sendData(data["deviceId"], transactionAwaitingSend!);
+      _sendData(data["deviceId"], _transactionAwaitingSend!);
     } else if (data["message"]["type"].contains("TRANSACTION_HEADER")) {
       //receiving request from one, accepting
       context.read<PercentageOfIO>().value = 0.0;
@@ -281,13 +301,11 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
     }
   }
 
-  _requestSend(Device device, MediaTransaction transaction) {
+  void _requestSend(Device device, MediaTransaction transaction) {
     int totalBytes = 0;
     transaction.data!.forEach((element) {
       totalBytes += element.file!.length;
     });
-
-    transactionAwaitingSend = transaction;
 
     nearbyService!.sendMessage(
         device.deviceId,
@@ -298,7 +316,7 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
         }));
   }
 
-  _sendData(String deviceId, MediaTransaction transaction) {
+  _sendData(String deviceId, MediaTransaction transaction) async {
     context.read<ShowPercentageOfIO>().value = true;
     context.read<PercentageOfIO>().value = 0;
     int totalBytes = 0;
@@ -340,12 +358,14 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
       }
       context.read<PercentageOfIO>().value = totalBeingSent / totalBytes;
     });
-    // await Future.delayed(Duration(milliseconds: 200));
     nearbyService!.sendMessage(
         deviceId,
         jsonEncode({
           "type": "TRANSACTION_TRAILER",
           "status": "END",
         }));
+    receivedDataSubscription!.cancel();
+    receivedDataSubscription = nearbyService!
+        .dataReceivedSubscription(callback: dataReceivedSubscriptionCallback);
   }
 }
