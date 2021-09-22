@@ -1,14 +1,19 @@
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:file_icon/file_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
+import 'package:mime/mime.dart';
 import 'package:open_file/open_file.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 import 'package:provider/provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:wifi_direct_share/data_classes/percentage_of_io.dart';
 import 'package:wifi_direct_share/data_classes/refresh_function.dart';
 import 'package:wifi_direct_share/data_classes/show_io_percentage.dart';
+import 'package:wifi_direct_share/fragments/files_separated_list.dart';
 import 'package:wifi_direct_share/globals.dart';
 
 class WifiDirectSlideUpPanel extends StatefulWidget {
@@ -92,7 +97,6 @@ class _WifiDirectSlideUpPanelState extends State<WifiDirectSlideUpPanel> {
                         progressColor: Colors.green[400],
                         radius: 32,
                         lineWidth: 3,
-                        // animation: true,
                         percent: context.watch<PercentageOfIO>().value,
                         center: Text(
                           (context.watch<PercentageOfIO>().value * 100)
@@ -107,80 +111,15 @@ class _WifiDirectSlideUpPanelState extends State<WifiDirectSlideUpPanel> {
               ),
             ),
             Expanded(
-              child: deviceType == DeviceType.sender
-                  ? ListView.separated(
-                      padding: EdgeInsets.only(bottom: 10),
-                      controller: widget.controller,
-                      itemBuilder: (context, index) {
-                        return ListTile(
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                              File((context.read<Map<String, dynamic>>()[
-                                      "SharedFiles"][index] as SharedMediaFile)
-                                  .path),
-                            ),
-                          ),
-                          trailing: IconButton(
-                              onPressed: () {
-                                context
-                                    .read<Map<String, dynamic>>()["SharedFiles"]
-                                    .removeAt(index);
-                              },
-                              icon: Icon(
-                                Icons.delete,
-                                color: Colors.grey[600],
-                              )),
-                          title: Text((context.read<Map<String, dynamic>>()[
-                                  "SharedFiles"][index] as SharedMediaFile)
-                              .path
-                              .split("/")
-                              .last),
-                          onTap: () {
-                            OpenFile.open((context.read<Map<String, dynamic>>()[
-                                    "SharedFiles"][index] as SharedMediaFile)
-                                .path);
-                          },
-                        );
-                      },
-                      separatorBuilder: (context, index) {
-                        return Divider(color: Colors.grey[800]);
-                      },
-                      itemCount: context
-                          .read<Map<String, dynamic>>()["SharedFiles"]
-                          .length)
-                  : ListView.separated(
-                      padding: EdgeInsets.only(bottom: 10),
-                      controller: widget.controller,
-                      itemBuilder: (context, index) {
-                        return ListTile(
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                              File((context.read<Map<String, dynamic>>()[
-                                      "ReceivedFiles"][index] as File)
-                                  .path),
-                            ),
-                          ),
-                          title: Text((context.read<Map<String, dynamic>>()[
-                                  "ReceivedFiles"][index] as File)
-                              .path
-                              .split("/")
-                              .last),
-                          onTap: () {
-                            OpenFile.open((context.read<Map<String, dynamic>>()[
-                                    "ReceivedFiles"][index] as File)
-                                .path);
-                          },
-                        );
-                      },
-                      separatorBuilder: (context, index) {
-                        return Divider(color: Colors.grey[800]);
-                      },
-                      itemCount: context
-                          .read<Map<String, dynamic>>()["ReceivedFiles"]
-                          .length),
-            ),
+                child: deviceType == DeviceType.sender
+                    ? FilesSeparatedList(
+                        data:
+                            context.read<Map<String, dynamic>>()["SharedFiles"],
+                        controller: widget.controller!)
+                    : FilesSeparatedList(
+                        data: context
+                            .read<Map<String, dynamic>>()["ReceivedFiles"],
+                        controller: widget.controller!)),
           ],
         ),
       ),

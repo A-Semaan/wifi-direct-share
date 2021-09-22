@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:device_info/device_info.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -127,24 +128,78 @@ class _MyAppState extends State<MyApp> {
                     child: Text("Scan")),
               ],
             ),
-            body: SlidingUpPanel(
-              backdropTapClosesPanel: true,
-              backdropColor: Colors.grey[850]!,
-              minHeight: 60,
-              backdropEnabled: true,
-              backdropOpacity: 0.4,
-              borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(20), topRight: Radius.circular(20)),
-              border: Border.all(
-                color: Colors.grey[850]!,
-              ),
-              color: Color.fromRGBO(20, 20, 20, 1.0),
-              panelBuilder: (ScrollController controller) {
-                return WifiDirectSlideUpPanel(
-                  controller: controller,
-                );
-              },
-              body: WifiDirectBody(),
+            body: Column(
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.only(
+                      top: 20.0, bottom: 20.0, left: 20, right: 20),
+                  child: deviceType == DeviceType.receiver
+                      ? FutureBuilder(
+                          future: DeviceInfoPlugin().androidInfo,
+                          builder: (context, snapshot) {
+                            if (snapshot.hasError) {
+                              return Text(
+                                  "Your phone is currently visible to nearby devices, and is in receiving mode",
+                                  style: TextStyle(
+                                    color: Colors.grey[300],
+                                    fontSize: 16,
+                                  ));
+                            } else if (!snapshot.hasData &&
+                                snapshot.connectionState !=
+                                    ConnectionState.done) {
+                              return SizedBox(
+                                  height: 30,
+                                  width: 30,
+                                  child: CircularProgressIndicator());
+                            } else if (snapshot.hasData) {
+                              AndroidDeviceInfo deviceInfo =
+                                  snapshot.data as AndroidDeviceInfo;
+                              return Text(
+                                "Your phone is currently visible to nearby devices, and is in receiving mode.\n\n" +
+                                    "Your device is discoverable under the name ${deviceInfo.model}",
+                                style: TextStyle(
+                                  color: Colors.grey[300],
+                                  fontSize: 16,
+                                ),
+                                textAlign: TextAlign.left,
+                              );
+                            } else {
+                              return Text(
+                                  "Your phone is currently visible to nearby devices, and is in receiving mode",
+                                  style: TextStyle(
+                                    color: Colors.grey[300],
+                                    fontSize: 16,
+                                  ));
+                            }
+                          })
+                      : Container(
+                          height: 0,
+                        ),
+                ),
+                Expanded(
+                  child: SlidingUpPanel(
+                    backdropTapClosesPanel: true,
+                    backdropColor: Colors.grey[850]!,
+                    minHeight: 60,
+                    backdropEnabled: true,
+                    backdropOpacity: 0.4,
+                    borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20)),
+                    border: Border.all(
+                      color: Colors.grey[850]!,
+                    ),
+                    color: Color.fromRGBO(20, 20, 20, 1.0),
+                    panelBuilder: (ScrollController controller) {
+                      return WifiDirectSlideUpPanel(
+                        controller: controller,
+                      );
+                    },
+                    body: WifiDirectBody(),
+                  ),
+                ),
+              ],
             ),
           );
         },

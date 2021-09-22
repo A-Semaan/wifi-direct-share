@@ -38,6 +38,9 @@ dependencies:
   flutter_local_notifications: ^8.2.0
   permission_handler: ^8.1.6
   open_file: ^3.2.1
+  file_icon: ^1.0.0
+  mime: ^1.0.0
+  video_thumbnail: ^0.4.3
   # one_ui_scroll_view:
   #   git:
   #     url: https://github.com/jja08111/one_ui_scroll_view.git

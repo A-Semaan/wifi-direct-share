@@ -33,11 +33,11 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
   String tempFileNameBeingReceived = "";
 
   HashSet<Device> devices = HashSet<Device>(equals: (device1, device2) {
-    return device1.deviceId == device2;
+    return device1.deviceId == device2.deviceId;
   });
   HashSet<Device> connectedDevices =
       HashSet<Device>(equals: (device1, device2) {
-    return device1.deviceId == device2;
+    return device1.deviceId == device2.deviceId;
   });
   late StreamSubscription? subscription;
   late StreamSubscription? receivedDataSubscription;
@@ -59,6 +59,9 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
   MediaTransaction? _transactionAwaitingSend;
   Device? _tempConnectedDevice;
   bool _triggerSend = false;
+
+  int _totalBeingSent = 0;
+  int _totalBytes = 0;
 
   @override
   void initState() {
@@ -139,17 +142,6 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
     super.dispose();
   }
 
-  String getStateName(SessionState state) {
-    switch (state) {
-      case SessionState.notConnected:
-        return "disconnected";
-      case SessionState.connecting:
-        return "waiting";
-      default:
-        return "connected";
-    }
-  }
-
   Icon? _getDeviceIcon(Device device) {
     return const Icon(
       Icons.phone_android,
@@ -224,7 +216,6 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
         _tempConnectedDevice != null &&
         _transactionAwaitingSend != null &&
         _transactionAwaitingSend!.data!.length > 0) {
-      print("#########################################################");
       _triggerSend = false;
       Future.delayed(Duration(seconds: 2), () {
         _requestSend(_tempConnectedDevice!, _transactionAwaitingSend!);
@@ -238,6 +229,9 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
     if (data["message"]["type"].contains("TRANSACTION_ACCEPTED")) {
       //accepted and sending to two
       _sendData(data["deviceId"], _transactionAwaitingSend!);
+    } else if (data["message"]["type"].contains("NEXT")) {
+      await Future.delayed(Duration(milliseconds: 500));
+      _sendNext(data["deviceId"], _transactionAwaitingSend);
     } else if (data["message"]["type"].contains("TRANSACTION_HEADER")) {
       //receiving request from one, accepting
       context.read<PercentageOfIO>().value = 0.0;
@@ -271,7 +265,25 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
             File file = File(internalStorageDownloadsFolderPath +
                 "/" +
                 tempFileNameBeingReceived);
-            if (!(await file.exists())) {
+            if (await file.exists()) {
+              int addition = 0;
+              int extensionIndex = -1;
+              do {
+                addition++;
+                extensionIndex = tempFileNameBeingReceived.lastIndexOf(".");
+                String? newFileName;
+                if (extensionIndex == -1) {
+                  newFileName = tempFileNameBeingReceived + " ($addition)";
+                } else {
+                  newFileName =
+                      tempFileNameBeingReceived.substring(0, extensionIndex) +
+                          " ($addition)" +
+                          tempFileNameBeingReceived.substring(extensionIndex);
+                }
+                file = File(
+                    internalStorageDownloadsFolderPath + "/" + newFileName);
+              } while (await file.exists());
+            } else {
               await file.create();
             }
             await file.writeAsBytes(
@@ -283,6 +295,12 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
                 .add(file);
             context.read<RefreshFunction>().func!();
             tempBufferToWriteOn.clear();
+            await Future.delayed(Duration(milliseconds: 500));
+            nearbyService!.sendMessage(
+                data["deviceId"],
+                jsonEncode({
+                  "type": "NEXT",
+                }));
           } catch (ex) {
             print(ex);
           } finally {
@@ -316,56 +334,66 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
         }));
   }
 
+  _sendNext(String deviceId, MediaTransaction? transaction) {
+    if (transaction == null) {
+      return;
+    }
+    if (transaction.data!.length == 0) {
+      transaction.data!.forEach((element) {});
+      nearbyService!.sendMessage(
+          deviceId,
+          jsonEncode({
+            "type": "TRANSACTION_TRAILER",
+            "status": "END",
+          }));
+      _transactionAwaitingSend = null;
+      receivedDataSubscription!.cancel();
+      receivedDataSubscription = nearbyService!
+          .dataReceivedSubscription(callback: dataReceivedSubscriptionCallback);
+      return;
+    }
+    MediaFile element = transaction.data![0];
+    transaction.data!.removeAt(0);
+    int totalPacketsToSend = (element.size! / PACKET_FRAGMENT).ceil();
+    List<List<int>> partitions =
+        partition(element.file!, PACKET_FRAGMENT).toList();
+
+    for (int i = 0; i < totalPacketsToSend; i++) {
+      String status = "";
+      if (totalPacketsToSend == 1) {
+        status = "BEGIN|END";
+      } else if (i == 0) {
+        status = "BEGIN";
+      } else if (i == totalPacketsToSend - 1) {
+        status = "MID|END";
+      } else {
+        status = "MID";
+      }
+      dynamic data = jsonEncode(partitions[i]);
+      _totalBeingSent += partitions[i].length;
+
+      nearbyService!.sendMessage(
+          deviceId,
+          jsonEncode({
+            "type": "PACKET",
+            "sequenceIndex": "$i / $totalPacketsToSend",
+            "fileID": element.name!,
+            "status": status,
+            "data": data,
+          }));
+    }
+    context.read<PercentageOfIO>().value = _totalBeingSent / _totalBytes;
+  }
+
   _sendData(String deviceId, MediaTransaction transaction) async {
     context.read<ShowPercentageOfIO>().value = true;
     context.read<PercentageOfIO>().value = 0;
-    int totalBytes = 0;
+
     transaction.data!.forEach((element) {
-      totalBytes += element.file!.length;
+      _totalBytes += element.file!.length;
     });
-    int totalBeingSent = 0;
 
     // await Future.delayed(Duration(milliseconds: 200));
-
-    transaction.data!.forEach((element) {
-      int totalPacketsToSend = (element.size! / PACKET_FRAGMENT).ceil();
-      List<List<int>> partitions =
-          partition(element.file!, PACKET_FRAGMENT).toList();
-
-      for (int i = 0; i < totalPacketsToSend; i++) {
-        String status = "";
-        if (totalPacketsToSend == 1) {
-          status = "BEGIN|END";
-        } else if (i == 0) {
-          status = "BEGIN";
-        } else if (i == totalPacketsToSend - 1) {
-          status = "MID|END";
-        } else {
-          status = "MID";
-        }
-        dynamic data = jsonEncode(partitions[i]);
-        totalBeingSent += partitions[i].length;
-
-        nearbyService!.sendMessage(
-            deviceId,
-            jsonEncode({
-              "type": "PACKET",
-              "sequenceIndex": "$i / $totalPacketsToSend",
-              "fileID": element.name!,
-              "status": status,
-              "data": data,
-            }));
-      }
-      context.read<PercentageOfIO>().value = totalBeingSent / totalBytes;
-    });
-    nearbyService!.sendMessage(
-        deviceId,
-        jsonEncode({
-          "type": "TRANSACTION_TRAILER",
-          "status": "END",
-        }));
-    receivedDataSubscription!.cancel();
-    receivedDataSubscription = nearbyService!
-        .dataReceivedSubscription(callback: dataReceivedSubscriptionCallback);
+    _sendNext(deviceId, transaction);
   }
 }
