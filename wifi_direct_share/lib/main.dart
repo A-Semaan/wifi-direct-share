@@ -44,6 +44,9 @@ class _MyAppState extends State<MyApp> {
         print("Shared:" +
             (providerData["SharedFiles"].map((f) => f.path)?.join(",") ?? ""));
         providerData["SharedFiles"] = value;
+        if (value.length > 0) {
+          deviceType = DeviceType.sender;
+        }
       });
     }, onError: (err) {
       print("getIntentDataStream error: $err");

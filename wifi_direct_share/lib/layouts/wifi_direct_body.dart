@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_nearby_connections/flutter_nearby_connections.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:quiver/iterables.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:wifi_direct_share/data_classes/discovering_change_notifier.dart';
@@ -233,17 +234,37 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
       await Future.delayed(Duration(milliseconds: 500));
       _sendNext(data["deviceId"], _transactionAwaitingSend);
     } else if (data["message"]["type"].contains("TRANSACTION_HEADER")) {
-      //receiving request from one, accepting
-      context.read<PercentageOfIO>().value = 0.0;
-      context.read<ShowPercentageOfIO>().value = true;
-      totalBytesToReceive = data["message"]["totalBytes"];
-      (context.read<Map<String, dynamic>>()["ReceivedFiles"] as List<File>)
-          .clear();
-      nearbyService!.sendMessage(
-          data["deviceId"],
-          jsonEncode({
-            "type": "TRANSACTION_ACCEPTED",
-          }));
+      if (await Permission.storage.request().isGranted) {
+        //receiving request from one, accepting
+        context.read<PercentageOfIO>().value = 0.0;
+        context.read<ShowPercentageOfIO>().value = true;
+        totalBytesToReceive = data["message"]["totalBytes"];
+        (context.read<Map<String, dynamic>>()["ReceivedFiles"] as List<File>)
+            .clear();
+        nearbyService!.sendMessage(
+            data["deviceId"],
+            jsonEncode({
+              "type": "TRANSACTION_ACCEPTED",
+            }));
+      } else {
+        showDialog(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                backgroundColor: Colors.black,
+                actions: [
+                  TextButton(
+                      onPressed: () {
+                        openAppSettings();
+                        Navigator.of(context).pop();
+                      },
+                      child: Text("OK"))
+                ],
+                content: Text(
+                    "This app needs storage access in order to receive files.\nPlease enable them in settings"),
+              );
+            });
+      }
     } else if (data["message"]["type"].contains("PACKET")) {
       //receiving data from one
       if (data["message"]["status"].contains("BEGIN") ||
@@ -295,18 +316,18 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
                 .add(file);
             context.read<RefreshFunction>().func!();
             tempBufferToWriteOn.clear();
+          } catch (ex) {
+            print(ex);
+          } finally {
+            await receivedDataSubscription!.cancel();
+            receivedDataSubscription = nearbyService!.dataReceivedSubscription(
+                callback: dataReceivedSubscriptionCallback);
             await Future.delayed(Duration(milliseconds: 500));
             nearbyService!.sendMessage(
                 data["deviceId"],
                 jsonEncode({
                   "type": "NEXT",
                 }));
-          } catch (ex) {
-            print(ex);
-          } finally {
-            receivedDataSubscription!.cancel();
-            receivedDataSubscription = nearbyService!.dataReceivedSubscription(
-                callback: dataReceivedSubscriptionCallback);
           }
         }
       }
