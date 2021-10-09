@@ -74,7 +74,7 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-          color: Color.fromRGBO(20, 20, 20, 1.0),
+          color: Theme.of(context).canvasColor,
           border: Border.all(
             color: Colors.grey[850]!,
           ),
@@ -179,7 +179,7 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
         strategy: Strategy.Wi_Fi_P2P,
         callback: (isRunning) async {
           if (isRunning) {
-            discover();
+            discover(context);
           }
         });
     subscription =

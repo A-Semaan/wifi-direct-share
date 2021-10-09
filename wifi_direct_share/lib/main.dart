@@ -76,12 +76,35 @@ class _MyAppState extends State<MyApp> {
           primaryColor: Colors.black,
           fontFamily: "Roboto",
           textTheme: TextTheme(
-              bodyText1: TextStyle(color: Colors.white),
-              bodyText2: TextStyle(color: Colors.white, fontSize: 18),
-              headline6: TextStyle(color: Colors.white),
-              subtitle1: TextStyle(color: Colors.grey[300], fontSize: 13)),
+            bodyText1: TextStyle(color: Colors.white),
+            bodyText2: TextStyle(color: Colors.white, fontSize: 18),
+            subtitle1: TextStyle(color: Colors.grey[300], fontSize: 13),
+            headline1: TextStyle(
+              color: Colors.grey[300],
+              fontSize: 18,
+            ),
+            headline2: TextStyle(
+              color: Colors.grey[300],
+              fontSize: 17,
+            ),
+            headline3: TextStyle(
+              color: Colors.grey[300],
+              fontSize: 16,
+            ),
+            headline4: TextStyle(
+              color: Colors.grey[300],
+              fontSize: 15,
+            ),
+            headline5: TextStyle(
+              color: Colors.grey[300],
+              fontSize: 14,
+            ),
+            headline6: TextStyle(color: Colors.white),
+          ),
           // colorScheme: ColorScheme(brightness: Brightness.dark,secondary: Colors.black),
           backgroundColor: Colors.black,
+          dialogBackgroundColor: Colors.grey[900],
+          canvasColor: Color.fromRGBO(20, 20, 20, 1.0),
           appBarTheme: AppBarTheme(
             color: Colors.black,
             systemOverlayStyle:
@@ -123,12 +146,102 @@ class _MyAppState extends State<MyApp> {
                     ),
                   ),
                 ),
-                TextButton(
-                    onPressed: () {
-                      discover();
-                      context.read<DiscoveringChangeNotifier>().value = true;
-                    },
-                    child: Text("Scan")),
+                context.read<DiscoveringChangeNotifier>().value
+                    ? TextButton(
+                        onPressed: () {
+                          stopDiscover(context);
+                        },
+                        child: Text("Stop"))
+                    : TextButton(
+                        onPressed: () {
+                          discover(context);
+                        },
+                        child: Text("Scan")),
+                PopupMenuButton<String>(
+                  onSelected: (option) {
+                    print("object");
+                    switch (option) {
+                      case "HowToUse":
+                        showDialog(
+                            context: context,
+                            builder: (context) {
+                              return AlertDialog(
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.all(Radius.circular(15))),
+                                title: Text(
+                                  "How to use",
+                                  style: Theme.of(context).textTheme.bodyText2,
+                                ),
+                                content: SizedBox(
+                                  height:
+                                      MediaQuery.of(context).size.height / 3,
+                                  child: SingleChildScrollView(
+                                    child: RichText(
+                                      text: TextSpan(
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .headline5,
+                                          children: <TextSpan>[
+                                            TextSpan(
+                                              text: "If you are receiving:\n\n",
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .headline3,
+                                            ),
+                                            TextSpan(
+                                                text:
+                                                    "\t- Just open the app and wait for the sender to make his move :D\n\n\n"),
+                                            TextSpan(
+                                              text: "If you are sending:\n\n",
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .headline3,
+                                            ),
+                                            TextSpan(
+                                                text: "\t- Click share and choose WiFi Direct from any app on your device.\n" +
+                                                    "\t- Wait for nearby devices to show up on the screen.\n" +
+                                                    "\t- Click on the device you desire to send the file(s) to\n" +
+                                                    "\t- And finally wait for the files to transfer :D\n\n\n"),
+                                            TextSpan(
+                                                text: "Note: If the device you desire to send files to is not showing up in the list " +
+                                                    "click the scan button on the device of the receiver AND ont he deivce of the sender."),
+                                          ]),
+                                    ),
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                      onPressed: () {
+                                        Navigator.of(context).pop();
+                                      },
+                                      child: Text("OK"))
+                                ],
+                              );
+                            });
+                        break;
+                      default:
+                        break;
+                    }
+                  },
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.all(
+                      Radius.circular(20.0),
+                    ),
+                  ),
+                  color: Theme.of(context).dialogBackgroundColor,
+                  itemBuilder: (BuildContext context) {
+                    return <PopupMenuItem<String>>[
+                      PopupMenuItem<String>(
+                        value: "HowToUse",
+                        textStyle: Theme.of(context).textTheme.headline3,
+                        child: Text(
+                          "How to use",
+                        ),
+                      )
+                    ];
+                  },
+                ),
               ],
             ),
             body: Column(
@@ -143,11 +256,9 @@ class _MyAppState extends State<MyApp> {
                           builder: (context, snapshot) {
                             if (snapshot.hasError) {
                               return Text(
-                                  "Your phone is currently visible to nearby devices, and is in receiving mode",
-                                  style: TextStyle(
-                                    color: Colors.grey[300],
-                                    fontSize: 16,
-                                  ));
+                                "Your phone is currently visible to nearby devices, and is in receiving mode",
+                                style: Theme.of(context).textTheme.headline3,
+                              );
                             } else if (!snapshot.hasData &&
                                 snapshot.connectionState !=
                                     ConnectionState.done) {
@@ -161,19 +272,14 @@ class _MyAppState extends State<MyApp> {
                               return Text(
                                 "Your phone is currently visible to nearby devices, and is in receiving mode.\n\n" +
                                     "Your device is discoverable under the name ${deviceInfo.model}",
-                                style: TextStyle(
-                                  color: Colors.grey[300],
-                                  fontSize: 16,
-                                ),
+                                style: Theme.of(context).textTheme.headline3,
                                 textAlign: TextAlign.left,
                               );
                             } else {
                               return Text(
-                                  "Your phone is currently visible to nearby devices, and is in receiving mode",
-                                  style: TextStyle(
-                                    color: Colors.grey[300],
-                                    fontSize: 16,
-                                  ));
+                                "Your phone is currently visible to nearby devices, and is in receiving mode",
+                                style: Theme.of(context).textTheme.headline3,
+                              );
                             }
                           })
                       : Container(
@@ -207,148 +313,6 @@ class _MyAppState extends State<MyApp> {
           );
         },
       ),
-      // FutureBuilder(
-      //   future: [Permission.locationWhenInUse, Permission.storage].request(),
-      //   builder: (context,
-      //       AsyncSnapshot<Map<Permission, PermissionStatus>> snapshot) {
-      //     if (snapshot.hasError) {
-      //       return Scaffold(
-      //         backgroundColor: Colors.black,
-      //         body: Center(
-      //           child: Padding(
-      //             padding: const EdgeInsets.all(8.0),
-      //             child: Text(
-      //               "An error has occured while requesting Storage permission",
-      //               textAlign: TextAlign.center,
-      //             ),
-      //           ),
-      //         ),
-      //       );
-      //     } else if (!snapshot.hasData ||
-      //         snapshot.connectionState != ConnectionState.done) {
-      //       return Scaffold(
-      //         backgroundColor: Colors.black,
-      //         body: Center(
-      //           child: SizedBox(
-      //             width: 40,
-      //             height: 40,
-      //             child: CircularProgressIndicator(),
-      //           ),
-      //         ),
-      //       );
-      //     } else if (snapshot.hasData) {
-      //       if ((snapshot.data![Permission.storage] as PermissionStatus)
-      //           .isGranted) {
-      //         return MultiProvider(
-      //           providers: [
-      //             Provider<Map<String, dynamic>>(create: (_) => providerData),
-      //             ChangeNotifierProvider<DiscoveringChangeNotifier>(
-      //                 create: (_) => new DiscoveringChangeNotifier()),
-      //             ChangeNotifierProvider<PercentageOfIO>(
-      //               create: (_) => PercentageOfIO(0),
-      //             ),
-      //             ChangeNotifierProvider<ShowPercentageOfIO>(
-      //               create: (_) => ShowPercentageOfIO(false),
-      //             ),
-      //             Provider<RefreshFunction>(
-      //               create: (_) => RefreshFunction(),
-      //             ),
-      //           ],
-      //           builder: (BuildContext context, widget) {
-      //             return Scaffold(
-      //               backgroundColor: Colors.black,
-      //               appBar: AppBar(
-      //                 title: const Text('Wi-Fi Direct'),
-      //                 automaticallyImplyLeading: false,
-      //                 actions: [
-      //                   Container(
-      //                     padding: EdgeInsets.only(top: 15, bottom: 15),
-      //                     width: 25,
-      //                     child: Visibility(
-      //                       maintainSize: true,
-      //                       maintainAnimation: true,
-      //                       maintainState: true,
-      //                       visible: context
-      //                           .watch<DiscoveringChangeNotifier>()
-      //                           .value,
-      //                       child: CircularProgressIndicator(
-      //                         color: Colors.lightBlue,
-      //                         strokeWidth: 2,
-      //                       ),
-      //                     ),
-      //                   ),
-      //                   TextButton(
-      //                       onPressed: () {
-      //                         discover();
-      //                         context
-      //                             .read<DiscoveringChangeNotifier>()
-      //                             .value = true;
-      //                       },
-      //                       child: Text("Scan")),
-      //                 ],
-      //               ),
-      //               body: SlidingUpPanel(
-      //                 backdropTapClosesPanel: true,
-      //                 backdropColor: Colors.grey[850]!,
-      //                 minHeight: 60,
-      //                 backdropEnabled: true,
-      //                 backdropOpacity: 0.4,
-      //                 borderRadius: BorderRadius.only(
-      //                     topLeft: Radius.circular(20),
-      //                     topRight: Radius.circular(20)),
-      //                 border: Border.all(
-      //                   color: Colors.grey[850]!,
-      //                 ),
-      //                 color: Color.fromRGBO(20, 20, 20, 1.0),
-      //                 panelBuilder: (ScrollController controller) {
-      //                   return WifiDirectSlideUpPanel(
-      //                     controller: controller,
-      //                   );
-      //                 },
-      //                 body: WifiDirectBody(),
-      //               ),
-      //             );
-      //           },
-      //         );
-      //       } else {
-      //         return Scaffold(
-      //           backgroundColor: Colors.black,
-      //           body: Center(
-      //             child: Padding(
-      //               padding: const EdgeInsets.all(8.0),
-      //               child: Column(
-      //                 mainAxisSize: MainAxisSize.min,
-      //                 children: [
-      //                   Text(
-      //                       "This app needs Storage permission in order for it to run",
-      //                       textAlign: TextAlign.center),
-      //                   TextButton(
-      //                       onPressed: () async {
-      //                         openAppSettings();
-      //                         await Future.delayed(
-      //                             Duration(milliseconds: 100));
-      //                         setState(() {});
-      //                       },
-      //                       child: Text("Grant storage permission")),
-      //                 ],
-      //               ),
-      //             ),
-      //           ),
-      //         );
-      //       }
-      //     } else {
-      //       return Scaffold(
-      //         backgroundColor: Colors.black,
-      //         body: Center(
-      //           child: Padding(
-      //             padding: const EdgeInsets.all(8.0),
-      //             child: Text("unknown state", textAlign: TextAlign.center),
-      //           ),
-      //         ),
-      //       );
-      //     }
-      //   },
-      // )
     );
   }
 
