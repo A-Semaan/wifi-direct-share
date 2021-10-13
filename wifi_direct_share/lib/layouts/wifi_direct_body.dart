@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
@@ -10,10 +9,11 @@ import 'package:flutter_nearby_connections/flutter_nearby_connections.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:quiver/iterables.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
-import 'package:wifi_direct_share/data_classes/discovering_change_notifier.dart';
 import 'package:provider/provider.dart';
-import 'package:wifi_direct_share/data_classes/media-file.dart';
-import 'package:wifi_direct_share/data_classes/media-transaction.dart';
+import 'package:wifi_direct_share/data_classes/media_file.dart';
+import 'package:wifi_direct_share/data_classes/media_transaction.dart';
+import 'package:wifi_direct_share/data_classes/packet.dart';
+import 'package:wifi_direct_share/data_classes/packet_enums.dart';
 import 'package:wifi_direct_share/data_classes/percentage_of_io.dart';
 import 'package:wifi_direct_share/data_classes/refresh_function.dart';
 import 'package:wifi_direct_share/data_classes/show_io_percentage.dart';
@@ -225,27 +225,24 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
   }
 
   dataReceivedSubscriptionCallback(data) async {
-    data["message"] = jsonDecode(data["message"]);
+    Packet packet = Packet.fromJson(jsonDecode(data["message"]));
 
-    if (data["message"]["type"].contains("TRANSACTION_ACCEPTED")) {
+    if (packet.type == PacketType.TRANSACTION_ACCEPTED) {
       //accepted and sending to two
       _sendData(data["deviceId"], _transactionAwaitingSend!);
-    } else if (data["message"]["type"].contains("NEXT")) {
+    } else if (packet.type == PacketType.NEXT_FILE) {
       await Future.delayed(Duration(milliseconds: 500));
-      _sendNext(data["deviceId"], _transactionAwaitingSend);
-    } else if (data["message"]["type"].contains("TRANSACTION_HEADER")) {
+      _sendNextFile(data["deviceId"], _transactionAwaitingSend);
+    } else if (packet.type == PacketType.TRANSACTION_HEADER) {
       if (await Permission.storage.request().isGranted) {
         //receiving request from one, accepting
         context.read<PercentageOfIO>().value = 0.0;
         context.read<ShowPercentageOfIO>().value = true;
-        totalBytesToReceive = data["message"]["totalBytes"];
+        totalBytesToReceive = packet.totalBytes!;
         (context.read<Map<String, dynamic>>()["ReceivedFiles"] as List<File>)
             .clear();
-        nearbyService!.sendMessage(
-            data["deviceId"],
-            jsonEncode({
-              "type": "TRANSACTION_ACCEPTED",
-            }));
+        nearbyService!.sendMessage(data["deviceId"],
+            Packet(type: PacketType.TRANSACTION_ACCEPTED).toJson());
       } else {
         showDialog(
             context: context,
@@ -265,22 +262,21 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
               );
             });
       }
-    } else if (data["message"]["type"].contains("PACKET")) {
+    } else if (packet.type == PacketType.PACKET) {
       //receiving data from one
-      if (data["message"]["status"].contains("BEGIN") ||
-          data["message"]["status"].contains("MID")) {
-        if (data["message"]["status"].contains("BEGIN")) {
-          tempFileNameBeingReceived = data["message"]["fileID"];
+      if (packet.status!.contains(PacketStatus.BEGIN) ||
+          packet.status!.contains(PacketStatus.MID)) {
+        if (packet.status!.contains(PacketStatus.BEGIN)) {
+          tempFileNameBeingReceived = packet.fileID!;
         }
-        List<int> dataInts =
-            (jsonDecode(data["message"]["data"]) as List).cast<int>();
+        List<int> dataInts = (jsonDecode(packet.data!) as List).cast<int>();
         totalBytesReceived += dataInts.length;
         context.read<PercentageOfIO>().value =
             totalBytesReceived / totalBytesToReceive;
         tempBufferToWriteOn.addAll(dataInts);
         // print("dataReceivedSubscription: ${jsonEncode(data['message'])}");
       }
-      if (data["message"]["status"].contains("END")) {
+      if (packet.status!.contains(PacketStatus.END)) {
         if (tempBufferToWriteOn.length > 0) {
           try {
             File file = File(internalStorageDownloadsFolderPath +
@@ -324,14 +320,11 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
                 callback: dataReceivedSubscriptionCallback);
             await Future.delayed(Duration(milliseconds: 500));
             nearbyService!.sendMessage(
-                data["deviceId"],
-                jsonEncode({
-                  "type": "NEXT",
-                }));
+                data["deviceId"], Packet(type: PacketType.NEXT_FILE).toJson());
           }
         }
       }
-    } else if (data["message"]["type"].contains("TRANSACTION_TRAILER")) {
+    } else if (packet.type == PacketType.TRANSACTION_TRAILER) {
       //receiving data from one
       totalBytesToReceive = 0;
       totalBytesReceived = 0;
@@ -348,14 +341,14 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
 
     nearbyService!.sendMessage(
         device.deviceId,
-        jsonEncode({
-          "type": "TRANSACTION_HEADER",
-          "totalFiles": transaction.data!.length,
-          "totalBytes": totalBytes,
-        }));
+        Packet(
+                type: PacketType.TRANSACTION_HEADER,
+                totalFiles: transaction.data!.length,
+                totalBytes: totalBytes)
+            .toJson());
   }
 
-  _sendNext(String deviceId, MediaTransaction? transaction) {
+  _sendNextFile(String deviceId, MediaTransaction? transaction) {
     if (transaction == null) {
       return;
     }
@@ -363,10 +356,9 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
       transaction.data!.forEach((element) {});
       nearbyService!.sendMessage(
           deviceId,
-          jsonEncode({
-            "type": "TRANSACTION_TRAILER",
-            "status": "END",
-          }));
+          Packet(
+              type: PacketType.TRANSACTION_TRAILER,
+              status: [PacketStatus.END]).toJson());
       _transactionAwaitingSend = null;
       receivedDataSubscription!.cancel();
       receivedDataSubscription = nearbyService!
@@ -380,28 +372,30 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
         partition(element.file!, PACKET_FRAGMENT).toList();
 
     for (int i = 0; i < totalPacketsToSend; i++) {
-      String status = "";
+      List<PacketStatus> status = [];
       if (totalPacketsToSend == 1) {
-        status = "BEGIN|END";
+        status.add(PacketStatus.BEGIN);
+        status.add(PacketStatus.END);
       } else if (i == 0) {
-        status = "BEGIN";
+        status.add(PacketStatus.BEGIN);
       } else if (i == totalPacketsToSend - 1) {
-        status = "MID|END";
+        status.add(PacketStatus.MID);
+        status.add(PacketStatus.END);
       } else {
-        status = "MID";
+        status.add(PacketStatus.MID);
       }
       dynamic data = jsonEncode(partitions[i]);
       _totalBeingSent += partitions[i].length;
 
       nearbyService!.sendMessage(
           deviceId,
-          jsonEncode({
-            "type": "PACKET",
-            "sequenceIndex": "$i / $totalPacketsToSend",
-            "fileID": element.name!,
-            "status": status,
-            "data": data,
-          }));
+          Packet(
+            type: PacketType.PACKET,
+            sequenceIndex: "$i / $totalPacketsToSend",
+            fileID: element.name!,
+            status: status,
+            data: data,
+          ).toJson());
     }
     context.read<PercentageOfIO>().value = _totalBeingSent / _totalBytes;
   }
@@ -415,6 +409,6 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
     });
 
     // await Future.delayed(Duration(milliseconds: 200));
-    _sendNext(deviceId, transaction);
+    _sendNextFile(deviceId, transaction);
   }
 }

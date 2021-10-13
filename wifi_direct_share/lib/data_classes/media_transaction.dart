@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:wifi_direct_share/data_classes/media-file.dart';
+import 'package:wifi_direct_share/data_classes/media_file.dart';
 
 class MediaTransaction {
   List<MediaFile>? data;

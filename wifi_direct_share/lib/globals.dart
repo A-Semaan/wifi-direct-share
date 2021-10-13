@@ -29,7 +29,8 @@ discover(BuildContext context) async {
   }
   _isDiscovering = true;
   Future.delayed(Duration(seconds: 7), () {
-    stopDiscover(context);
+    context.read<DiscoveringChangeNotifier>().value = false;
+    _isDiscovering = false;
   });
 }
 
