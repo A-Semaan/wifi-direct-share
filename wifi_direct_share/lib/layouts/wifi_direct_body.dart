@@ -58,11 +58,16 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
 
   //awaiting send
   MediaTransaction? _transactionAwaitingSend;
+  int? _transactionCurrentSendingIndex;
+  List<List<int>>? _partitionsCurrentlySending;
+  int? _totalPacketsToSend;
+  MediaFile? _fileCurrentlySending;
+
   Device? _tempConnectedDevice;
   bool _triggerSend = false;
 
-  int _totalBeingSent = 0;
-  int _totalBytes = 0;
+  int _totalBytesBeingSent = 0;
+  int _totalBytesToSend = 0;
 
   @override
   void initState() {
@@ -219,7 +224,7 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
         _transactionAwaitingSend!.data!.length > 0) {
       _triggerSend = false;
       Future.delayed(Duration(seconds: 2), () {
-        _requestSend(_tempConnectedDevice!, _transactionAwaitingSend!);
+        _requestSend(_tempConnectedDevice!);
       });
     }
   }
@@ -232,7 +237,10 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
       _sendData(data["deviceId"], _transactionAwaitingSend!);
     } else if (packet.type == PacketType.NEXT_FILE) {
       await Future.delayed(Duration(milliseconds: 500));
-      _sendNextFile(data["deviceId"], _transactionAwaitingSend);
+      _sendNextFile(data["deviceId"]);
+    } else if (packet.type == PacketType.NEXT_PACKET) {
+      await Future.delayed(Duration(milliseconds: 100));
+      _sendNextPacket(data["deviceId"]);
     } else if (packet.type == PacketType.TRANSACTION_HEADER) {
       if (await Permission.storage.request().isGranted) {
         //receiving request from one, accepting
@@ -275,43 +283,74 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
             totalBytesReceived / totalBytesToReceive;
         tempBufferToWriteOn.addAll(dataInts);
         // print("dataReceivedSubscription: ${jsonEncode(data['message'])}");
+        nearbyService!.sendMessage(
+            data["deviceId"], Packet(type: PacketType.NEXT_PACKET).toJson());
       }
       if (packet.status!.contains(PacketStatus.END)) {
+        bool weirdAndroidException = false;
         if (tempBufferToWriteOn.length > 0) {
           try {
-            File file = File(internalStorageDownloadsFolderPath +
-                "/" +
-                tempFileNameBeingReceived);
-            if (await file.exists()) {
-              int addition = 0;
-              int extensionIndex = -1;
-              do {
-                addition++;
-                extensionIndex = tempFileNameBeingReceived.lastIndexOf(".");
-                String? newFileName;
-                if (extensionIndex == -1) {
-                  newFileName = tempFileNameBeingReceived + " ($addition)";
-                } else {
-                  newFileName =
-                      tempFileNameBeingReceived.substring(0, extensionIndex) +
-                          " ($addition)" +
-                          tempFileNameBeingReceived.substring(extensionIndex);
+            do {
+              String fileName = internalStorageDownloadsFolderPath +
+                  "/" +
+                  tempFileNameBeingReceived;
+              if (weirdAndroidException) {
+                int extensionIndex = tempFileNameBeingReceived.lastIndexOf(".");
+                String newFileName =
+                    tempFileNameBeingReceived.substring(0, extensionIndex) +
+                        "_${DateTime.now().microsecond}" +
+                        tempFileNameBeingReceived.substring(extensionIndex);
+                fileName =
+                    internalStorageDownloadsFolderPath + "/" + newFileName;
+                weirdAndroidException = false;
+              }
+              File file = File(fileName);
+              if (await file.exists()) {
+                int addition = 0;
+                int extensionIndex = -1;
+                do {
+                  addition++;
+                  extensionIndex = tempFileNameBeingReceived.lastIndexOf(".");
+                  String? newFileName;
+                  if (extensionIndex == -1) {
+                    newFileName = tempFileNameBeingReceived + " ($addition)";
+                  } else {
+                    newFileName =
+                        tempFileNameBeingReceived.substring(0, extensionIndex) +
+                            " ($addition)" +
+                            tempFileNameBeingReceived.substring(extensionIndex);
+                  }
+                  file = File(
+                      internalStorageDownloadsFolderPath + "/" + newFileName);
+                } while (await file.exists());
+              } else {
+                try {
+                  await file.create();
+                } catch (ex) {
+                  if (ex is FileSystemException &&
+                      ex.osError!.errorCode == 17) {
+                    weirdAndroidException = true;
+                    continue;
+                  }
                 }
-                file = File(
-                    internalStorageDownloadsFolderPath + "/" + newFileName);
-              } while (await file.exists());
-            } else {
-              await file.create();
-            }
-            await file.writeAsBytes(
-              tempBufferToWriteOn,
-              mode: FileMode.writeOnly,
-            );
-            (context.read<Map<String, dynamic>>()["ReceivedFiles"]
-                    as List<File>)
-                .add(file);
-            context.read<RefreshFunction>().func!();
-            tempBufferToWriteOn.clear();
+              }
+              try {
+                await file.writeAsBytes(
+                  tempBufferToWriteOn,
+                  mode: FileMode.writeOnly,
+                );
+              } catch (ex) {
+                if (ex is FileSystemException && ex.osError!.errorCode == 17) {
+                  weirdAndroidException = true;
+                  continue;
+                }
+              }
+              (context.read<Map<String, dynamic>>()["ReceivedFiles"]
+                      as List<File>)
+                  .add(file);
+              context.read<RefreshFunction>().func!();
+              tempBufferToWriteOn.clear();
+            } while (weirdAndroidException);
           } catch (ex) {
             print(ex);
           } finally {
@@ -333,9 +372,9 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
     }
   }
 
-  void _requestSend(Device device, MediaTransaction transaction) {
+  void _requestSend(Device device) {
     int totalBytes = 0;
-    transaction.data!.forEach((element) {
+    _transactionAwaitingSend!.data!.forEach((element) {
       totalBytes += element.file!.length;
     });
 
@@ -343,17 +382,56 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
         device.deviceId,
         Packet(
                 type: PacketType.TRANSACTION_HEADER,
-                totalFiles: transaction.data!.length,
+                totalFiles: _transactionAwaitingSend!.data!.length,
                 totalBytes: totalBytes)
             .toJson());
   }
 
-  _sendNextFile(String deviceId, MediaTransaction? transaction) {
-    if (transaction == null) {
+  _sendNextPacket(String deviceId) {
+    if (_partitionsCurrentlySending != null ||
+        _transactionAwaitingSend != null) {
+      if (_partitionsCurrentlySending!.length > 0) {
+        int currentSendingIndex =
+            _totalPacketsToSend! - _partitionsCurrentlySending!.length;
+        List<PacketStatus> status = [];
+        if (_totalPacketsToSend == 1) {
+          status.add(PacketStatus.BEGIN);
+          status.add(PacketStatus.END);
+        } else if (currentSendingIndex == 0) {
+          status.add(PacketStatus.BEGIN);
+        } else if (currentSendingIndex == _totalPacketsToSend! - 1) {
+          status.add(PacketStatus.MID);
+          status.add(PacketStatus.END);
+        } else {
+          status.add(PacketStatus.MID);
+        }
+        dynamic data = jsonEncode(_partitionsCurrentlySending![0]);
+        _totalBytesBeingSent += _partitionsCurrentlySending![0].length;
+
+        _partitionsCurrentlySending!.removeAt(0);
+
+        nearbyService!.sendMessage(
+            deviceId,
+            Packet(
+              type: PacketType.PACKET,
+              sequenceIndex:
+                  "${currentSendingIndex + 1} / ${_totalPacketsToSend!}",
+              fileID: _fileCurrentlySending!.name!,
+              status: status,
+              data: data,
+            ).toJson());
+        context.read<PercentageOfIO>().value =
+            _totalBytesBeingSent / _totalBytesToSend;
+      }
+    }
+  }
+
+  _sendNextFile(String deviceId) {
+    if (_transactionAwaitingSend == null) {
       return;
     }
-    if (transaction.data!.length == 0) {
-      transaction.data!.forEach((element) {});
+    if (_transactionAwaitingSend!.data!.length == 0) {
+      _transactionAwaitingSend!.data!.forEach((element) {});
       nearbyService!.sendMessage(
           deviceId,
           Packet(
@@ -365,50 +443,26 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
           .dataReceivedSubscription(callback: dataReceivedSubscriptionCallback);
       return;
     }
-    MediaFile element = transaction.data![0];
-    transaction.data!.removeAt(0);
-    int totalPacketsToSend = (element.size! / PACKET_FRAGMENT).ceil();
-    List<List<int>> partitions =
-        partition(element.file!, PACKET_FRAGMENT).toList();
+    _fileCurrentlySending = _transactionAwaitingSend!.data![0];
+    _transactionAwaitingSend!.data!.removeAt(0);
+    _totalPacketsToSend =
+        (_fileCurrentlySending!.size! / PACKET_FRAGMENT).ceil();
+    _partitionsCurrentlySending =
+        partition(_fileCurrentlySending!.file!, PACKET_FRAGMENT).toList();
 
-    for (int i = 0; i < totalPacketsToSend; i++) {
-      List<PacketStatus> status = [];
-      if (totalPacketsToSend == 1) {
-        status.add(PacketStatus.BEGIN);
-        status.add(PacketStatus.END);
-      } else if (i == 0) {
-        status.add(PacketStatus.BEGIN);
-      } else if (i == totalPacketsToSend - 1) {
-        status.add(PacketStatus.MID);
-        status.add(PacketStatus.END);
-      } else {
-        status.add(PacketStatus.MID);
-      }
-      dynamic data = jsonEncode(partitions[i]);
-      _totalBeingSent += partitions[i].length;
-
-      nearbyService!.sendMessage(
-          deviceId,
-          Packet(
-            type: PacketType.PACKET,
-            sequenceIndex: "$i / $totalPacketsToSend",
-            fileID: element.name!,
-            status: status,
-            data: data,
-          ).toJson());
-    }
-    context.read<PercentageOfIO>().value = _totalBeingSent / _totalBytes;
+    _sendNextPacket(deviceId);
   }
 
   _sendData(String deviceId, MediaTransaction transaction) async {
+    _transactionCurrentSendingIndex = 0;
     context.read<ShowPercentageOfIO>().value = true;
     context.read<PercentageOfIO>().value = 0;
 
     transaction.data!.forEach((element) {
-      _totalBytes += element.file!.length;
+      _totalBytesToSend += element.file!.length;
     });
 
     // await Future.delayed(Duration(milliseconds: 200));
-    _sendNextFile(deviceId, transaction);
+    _sendNextFile(deviceId);
   }
 }

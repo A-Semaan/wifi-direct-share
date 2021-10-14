@@ -8,22 +8,20 @@ import 'package:mime/mime.dart';
 import 'package:open_file/open_file.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:provider/provider.dart';
 
 class FilesSeparatedList extends StatefulWidget {
   final dynamic data;
   final ScrollController controller;
 
-  FilesSeparatedList(
-      {required this.data, required this.controller, Key? key})
+  FilesSeparatedList({required this.data, required this.controller, Key? key})
       : super(key: key);
 
   @override
-  _FilesSeparatedListState createState() =>
-      _FilesSeparatedListState();
+  _FilesSeparatedListState createState() => _FilesSeparatedListState();
 }
 
-class _FilesSeparatedListState
-    extends State<FilesSeparatedList> {
+class _FilesSeparatedListState extends State<FilesSeparatedList> {
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
@@ -39,6 +37,18 @@ class _FilesSeparatedListState
                 child: _getIconFor(File(widget.data[index].path)),
               ),
             ),
+            trailing: widget.data is List<SharedMediaFile>
+                ? IconButton(
+                    onPressed: () {
+                      context
+                          .read<Map<String, dynamic>>()["SharedFiles"]
+                          .removeAt(index);
+                    },
+                    icon: Icon(
+                      Icons.delete,
+                      color: Colors.grey[600],
+                    ))
+                : null,
             title: Text(widget.data[index].path.split("/").last),
             onTap: () {
               OpenFile.open(widget.data[index].path);

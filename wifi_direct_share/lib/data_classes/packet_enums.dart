@@ -4,6 +4,7 @@ enum PacketType {
   TRANSACTION_HEADER,
   TRANSACTION_TRAILER,
   NEXT_FILE,
+  NEXT_PACKET,
 }
 enum PacketStatus {
   BEGIN,
@@ -23,6 +24,8 @@ extension PacketTypeExtension on PacketType {
       return PacketType.TRANSACTION_TRAILER;
     } else if (value == "NEXT_FILE") {
       return PacketType.NEXT_FILE;
+    } else if (value == "NEXT_PACKET") {
+      return PacketType.NEXT_PACKET;
     } else {
       throw new Exception("invalid PacketType value");
     }
@@ -39,6 +42,8 @@ extension PacketTypeExtension on PacketType {
       return "TRANSACTION_TRAILER";
     } else if (this == PacketType.NEXT_FILE) {
       return "NEXT_FILE";
+    } else if (this == PacketType.NEXT_PACKET) {
+      return "NEXT_PACKET";
     } else {
       return "";
     }
