@@ -40,9 +40,11 @@ class _FilesSeparatedListState extends State<FilesSeparatedList> {
             trailing: widget.data is List<SharedMediaFile>
                 ? IconButton(
                     onPressed: () {
-                      context
-                          .read<Map<String, dynamic>>()["SharedFiles"]
-                          .removeAt(index);
+                      setState(() {
+                        context
+                            .read<Map<String, dynamic>>()["SharedFiles"]
+                            .removeAt(index);
+                      });
                     },
                     icon: Icon(
                       Icons.delete,

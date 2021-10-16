@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'dart:async';
 
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'package:wifi_direct_share/data_classes/discovering_change_notifier.dart';
 import 'package:wifi_direct_share/data_classes/percentage_of_io.dart';
@@ -61,6 +62,7 @@ class _MyAppState extends State<MyApp> {
         }
       });
     });
+    _initializeSharedPreferences(callback: _checkIfShouldDisplayInstructions);
   }
 
   @override
@@ -111,6 +113,7 @@ class _MyAppState extends State<MyApp> {
                 SystemUiOverlayStyle(statusBarBrightness: Brightness.dark),
           )),
       home: MultiProvider(
+        key: globalKey,
         providers: [
           Provider<Map<String, dynamic>>(create: (_) => providerData),
           ChangeNotifierProvider<DiscoveringChangeNotifier>(
@@ -162,63 +165,7 @@ class _MyAppState extends State<MyApp> {
                     print("object");
                     switch (option) {
                       case "HowToUse":
-                        showDialog(
-                            context: context,
-                            builder: (context) {
-                              return AlertDialog(
-                                shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.all(Radius.circular(15))),
-                                title: Text(
-                                  "How to use",
-                                  style: Theme.of(context).textTheme.bodyText2,
-                                ),
-                                content: SizedBox(
-                                  height:
-                                      MediaQuery.of(context).size.height / 3,
-                                  child: SingleChildScrollView(
-                                    child: RichText(
-                                      text: TextSpan(
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .headline5,
-                                          children: <TextSpan>[
-                                            TextSpan(
-                                              text: "If you are receiving:\n\n",
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .headline3,
-                                            ),
-                                            TextSpan(
-                                                text:
-                                                    "\t- Just open the app and wait for the sender to make his move :D\n\n\n"),
-                                            TextSpan(
-                                              text: "If you are sending:\n\n",
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .headline3,
-                                            ),
-                                            TextSpan(
-                                                text: "\t- Click share and choose WiFi Direct from any app on your device.\n" +
-                                                    "\t- Wait for nearby devices to show up on the screen.\n" +
-                                                    "\t- Click on the device you desire to send the file(s) to\n" +
-                                                    "\t- And finally wait for the files to transfer :D\n\n\n"),
-                                            TextSpan(
-                                                text: "Note: If the device you desire to send files to is not showing up in the list " +
-                                                    "click the scan button on the device of the receiver AND ont he deivce of the sender."),
-                                          ]),
-                                    ),
-                                  ),
-                                ),
-                                actions: [
-                                  TextButton(
-                                      onPressed: () {
-                                        Navigator.of(context).pop();
-                                      },
-                                      child: Text("OK"))
-                                ],
-                              );
-                            });
+                        _showHowToUseDialog(context);
                         break;
                       default:
                         break;
@@ -323,5 +270,114 @@ class _MyAppState extends State<MyApp> {
     Directory? dir = await getExternalStorageDirectory();
     internalStorageDownloadsFolderPath =
         dir!.path.substring(0, dir.path.indexOf("0") + 2) + "Download";
+  }
+
+  void _showHowToUseDialog(context) {
+    bool _checked = false;
+    showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(15))),
+            title: Text(
+              "How to use",
+              style: Theme.of(context).textTheme.bodyText2,
+            ),
+            content: SizedBox(
+              height: MediaQuery.of(context).size.height / 3,
+              child: SingleChildScrollView(
+                child: RichText(
+                  text: TextSpan(
+                      style: Theme.of(context).textTheme.headline5,
+                      children: <TextSpan>[
+                        TextSpan(
+                          text: "If you are receiving:\n\n",
+                          style: Theme.of(context).textTheme.headline3,
+                        ),
+                        TextSpan(
+                            text:
+                                "\t- Just open the app and wait for the sender to make his move :D\n\n\n"),
+                        TextSpan(
+                          text: "If you are sending:\n\n",
+                          style: Theme.of(context).textTheme.headline3,
+                        ),
+                        TextSpan(
+                            text: "\t- Click share and choose WiFi Direct from any app on your device.\n" +
+                                "\t- Wait for nearby devices to show up on the screen.\n" +
+                                "\t- Click on the device you desire to send the file(s) to\n" +
+                                "\t- And finally wait for the files to transfer :D\n\n\n"),
+                        TextSpan(
+                            text: "Note: If the device you desire to send files to is not showing up in the list " +
+                                "click the scan button on the device of the receiver AND ont he deivce of the sender."),
+                      ]),
+                ),
+              ),
+            ),
+            actions: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _checked = !_checked;
+                      });
+                    },
+                    child: Row(
+                      children: [
+                        Checkbox(
+                          value: _checked,
+                          shape: CircleBorder(),
+                          fillColor: MaterialStateColor.resolveWith((states) {
+                            if (!states.contains(MaterialState.selected)) {
+                              return Colors.grey[300]!;
+                            } else {
+                              return Colors.blue[700]!;
+                            }
+                          }),
+                          onChanged: (value) {
+                            setState(() {
+                              _checked = value!;
+                            });
+                          },
+                        ),
+                        Text(
+                          "Do not show again",
+                          style: Theme.of(context).textTheme.headline3,
+                        )
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        if (_checked) {
+                          sharedPreferences!.setBool("ShowInstructuion", true);
+                        } else {
+                          sharedPreferences!.setBool("ShowInstructuion", false);
+                        }
+                      },
+                      child: Text("OK"))
+                ],
+              ),
+            ],
+          );
+        });
+  }
+
+  _initializeSharedPreferences({Function? callback}) async {
+    sharedPreferences = await SharedPreferences.getInstance();
+
+    if (callback != null) {
+      callback.call();
+    }
+  }
+
+  _checkIfShouldDisplayInstructions() {
+    if (!sharedPreferences!.containsKey("ShowInstructuion") ||
+        !sharedPreferences!.getBool("ShowInstructuion")!) {
+      _showHowToUseDialog(globalKey.currentContext!);
+    }
   }
 }

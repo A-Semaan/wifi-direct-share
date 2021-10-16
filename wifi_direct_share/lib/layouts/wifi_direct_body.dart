@@ -236,10 +236,10 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
       //accepted and sending to two
       _sendData(data["deviceId"], _transactionAwaitingSend!);
     } else if (packet.type == PacketType.NEXT_FILE) {
-      await Future.delayed(Duration(milliseconds: 500));
+      await Future.delayed(Duration(milliseconds: 100));
       _sendNextFile(data["deviceId"]);
     } else if (packet.type == PacketType.NEXT_PACKET) {
-      await Future.delayed(Duration(milliseconds: 100));
+      await Future.delayed(Duration(milliseconds: 10));
       _sendNextPacket(data["deviceId"]);
     } else if (packet.type == PacketType.TRANSACTION_HEADER) {
       if (await Permission.storage.request().isGranted) {
@@ -251,6 +251,7 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
             .clear();
         nearbyService!.sendMessage(data["deviceId"],
             Packet(type: PacketType.TRANSACTION_ACCEPTED).toJson());
+        totalBytesReceived = 0;
       } else {
         showDialog(
             context: context,
@@ -357,7 +358,7 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
             await receivedDataSubscription!.cancel();
             receivedDataSubscription = nearbyService!.dataReceivedSubscription(
                 callback: dataReceivedSubscriptionCallback);
-            await Future.delayed(Duration(milliseconds: 500));
+            await Future.delayed(Duration(milliseconds: 100));
             nearbyService!.sendMessage(
                 data["deviceId"], Packet(type: PacketType.NEXT_FILE).toJson());
           }
@@ -441,6 +442,7 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
       receivedDataSubscription!.cancel();
       receivedDataSubscription = nearbyService!
           .dataReceivedSubscription(callback: dataReceivedSubscriptionCallback);
+      _totalBytesBeingSent = 0;
       return;
     }
     _fileCurrentlySending = _transactionAwaitingSend!.data![0];
@@ -457,6 +459,7 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
     _transactionCurrentSendingIndex = 0;
     context.read<ShowPercentageOfIO>().value = true;
     context.read<PercentageOfIO>().value = 0;
+    _totalBytesBeingSent = 0;
 
     transaction.data!.forEach((element) {
       _totalBytesToSend += element.file!.length;

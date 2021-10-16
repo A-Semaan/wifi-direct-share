@@ -41,6 +41,7 @@ dependencies:
   file_icon: ^1.0.0
   mime: ^1.0.0
   video_thumbnail: ^0.4.3
+  shared_preferences: ^2.0.8
   # one_ui_scroll_view:
   #   git:
   #     url: https://github.com/jja08111/one_ui_scroll_view.git

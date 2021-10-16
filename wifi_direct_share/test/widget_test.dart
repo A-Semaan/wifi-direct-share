@@ -7,6 +7,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wifi_direct_share/globals.dart';
 
 import 'package:wifi_direct_share/main.dart';
 
