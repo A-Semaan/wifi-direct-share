@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_nearby_connections/flutter_nearby_connections.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:quiver/iterables.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:provider/provider.dart';
 import 'package:wifi_direct_share/data_classes/media_file.dart';
@@ -236,7 +236,7 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
       //accepted and sending to two
       _sendData(data["deviceId"], _transactionAwaitingSend!);
     } else if (packet.type == PacketType.NEXT_FILE) {
-      await Future.delayed(Duration(milliseconds: 100));
+      await Future.delayed(Duration(milliseconds: 300));
       _sendNextFile(data["deviceId"]);
     } else if (packet.type == PacketType.NEXT_PACKET) {
       await Future.delayed(Duration(milliseconds: 10));
@@ -450,7 +450,7 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
     _totalPacketsToSend =
         (_fileCurrentlySending!.size! / PACKET_FRAGMENT).ceil();
     _partitionsCurrentlySending =
-        partition(_fileCurrentlySending!.file!, PACKET_FRAGMENT).toList();
+        getPartitions(_fileCurrentlySending!.file!, PACKET_FRAGMENT);
 
     _sendNextPacket(deviceId);
   }
@@ -467,5 +467,26 @@ class _WifiDirectBodyState extends State<WifiDirectBody> {
 
     // await Future.delayed(Duration(milliseconds: 200));
     _sendNextFile(deviceId);
+  }
+
+  List<List<int>> getPartitions(Uint8List list, int partitionSize) {
+    List<List<int>> toReturn = [];
+    int counter = 0;
+    List<int> toAdd = [];
+    list.toList().forEach((element) {
+      if (counter == partitionSize) {
+        toReturn.add(toAdd);
+        toAdd = [];
+        counter = 0;
+      }
+      toAdd.add(element);
+      counter++;
+    });
+    if (toAdd.length != 0) {
+      toReturn.add(toAdd);
+      toAdd = [];
+    }
+
+    return toReturn;
   }
 }

@@ -9,7 +9,7 @@ enum DeviceType { receiver, sender }
 const int PORT = 5042;
 NearbyService? nearbyService = NearbyService();
 DeviceType deviceType = DeviceType.receiver;
-const int PACKET_FRAGMENT = 2048;
+const int PACKET_FRAGMENT = 7168;
 String internalStorageDownloadsFolderPath = "";
 
 bool _isDiscovering = false;

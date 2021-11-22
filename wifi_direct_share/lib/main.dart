@@ -229,8 +229,9 @@ class _MyAppState extends State<MyApp> {
                               );
                             }
                           })
-                      : Container(
-                          height: 0,
+                      : Text(
+                          "Your phone is in sending mode, and is currently scanning for nearby devices",
+                          style: Theme.of(context).textTheme.headline3,
                         ),
                 ),
                 Expanded(
@@ -309,7 +310,8 @@ class _MyAppState extends State<MyApp> {
                                 "\t- And finally wait for the files to transfer :D\n\n\n"),
                         TextSpan(
                             text: "Note: If the device you desire to send files to is not showing up in the list " +
-                                "click the scan button on the device of the receiver AND ont he deivce of the sender."),
+                                "click the scan button on the device of the receiver AND on the device of the sender. " +
+                                "If you still can't find the device, then unfortunately that device is not supported"),
                       ]),
                 ),
               ),
